@@ -1,94 +1,130 @@
 import { Link, Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function PatientDashboard({ auth, schedules, filters }) {
+export default function PatientDashboard({ auth, doctors, filters, specialties }) {
 
-    // --- SEARCH LOGIC ---
+    // --- STATE ---
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [filteredDoctors, setFilteredDoctors] = useState([]); 
 
-    const handleTyping = (e) => {
-        setSearchTerm(e.target.value);
-    };
-
-    const triggerSearch = () => {
-        router.get(route('dashboard'), { search: searchTerm }, {
-            preserveState: true,
-            replace: true,
-        });
-    };
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            triggerSearch();
+    // --- CALENDAR LOGIC ---
+    const getDaysInMonth = (year, month) => {
+        const date = new Date(year, month, 1);
+        const days = [];
+        while (date.getMonth() === month) {
+            days.push(new Date(date));
+            date.setDate(date.getDate() + 1);
         }
+        return days;
     };
 
-    // --- BOOKING LOGIC ---
-    const handleBook = (scheduleId) => {
-        const date = prompt("Enter appointment date (YYYY-MM-DD):", "2026-02-01");
+    const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+    const padDays = Array(firstDayOfMonth).fill(null);
+
+    // --- AVAILABILITY CHECKER ---
+    // Checks if ANY doctor in the selected category has a schedule on this day
+    const isDayAvailable = (dateObj) => {
+        if (!dateObj || !selectedCategory) return false;
+        const dayName = weekDays[dateObj.getDay()];
         
+        // Look through all doctors in this category
+        return doctors.some(doc => 
+            doc.specialization === selectedCategory && 
+            doc.schedules.some(s => s.day === dayName)
+        );
+    };
+
+    // --- MASTER FILTER LOGIC ---
+    useEffect(() => {
+        if (!selectedCategory) {
+            setFilteredDoctors([]);
+            return;
+        }
+
+        let results = doctors;
+
+        // 1. Filter by Category
+        results = results.filter(doc => doc.specialization === selectedCategory);
+
+        // 2. Filter by Search (Name)
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            results = results.filter(doc => doc.user.name.toLowerCase().includes(lowerTerm));
+        }
+
+        // 3. Filter by Date (Show doctors who have a schedule on this day)
+        if (selectedDate) {
+            const selectedDayName = weekDays[selectedDate.getDay()];
+            results = results.filter(doc => 
+                doc.schedules.some(s => s.day === selectedDayName)
+            );
+        }
+
+        setFilteredDoctors(results);
+    }, [selectedCategory, searchTerm, selectedDate, doctors]);
+
+    // --- HANDLERS ---
+    const handleTyping = (e) => setSearchTerm(e.target.value);
+    
+    const changeMonth = (offset) => {
+        const newDate = new Date(currentDate.setMonth(currentDate.getMonth() + offset));
+        setCurrentDate(new Date(newDate));
+        setSelectedDate(null);
+    };
+
+    const handleBook = (scheduleId) => {
+        const defaultDate = selectedDate 
+            ? selectedDate.toISOString().split('T')[0] 
+            : new Date().toISOString().split('T')[0];
+
+        const date = prompt("Confirm appointment date (YYYY-MM-DD):", defaultDate);
         if (date) {
-            router.post(route('appointments.store'), {
-                schedule_id: scheduleId,
-                date: date
-            }, {
+            router.post(route('appointments.store'), { schedule_id: scheduleId, date: date }, {
                 onSuccess: () => alert('Appointment Booked Successfully!'),
-                onError: (errors) => {
-                    alert('Error: ' + (errors.date || errors.schedule_id || 'Could not book.'));
-                }
+                onError: (errors) => alert('Error: ' + (errors.date || 'Could not book.'))
             });
         }
     };
 
-    // --- LOGOUT LOGIC ---
-    const handleLogout = (e) => {
-        e.preventDefault();
-        router.post(route('logout'));
-    };
+    const handleLogout = (e) => { e.preventDefault(); router.post(route('logout')); };
 
     return (
         <>
             <Head title="Find a Doctor" />
-
-            {/* ✅ MAIN WRAPPER: Deep Navy Background (Matches Home Page) */}
             <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-teal-500 selection:text-white">
                 
-                {/* --- NAVIGATION BAR (Custom for Dashboard) --- */}
-                <nav className="fixed w-full z-50 transition-all duration-300 bg-slate-900/80 backdrop-blur-md border-b border-white/10">
+                {/* --- NAV BAR --- */}
+                <nav className="fixed w-full z-50 bg-slate-900/80 backdrop-blur-md border-b border-white/10">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between h-20 items-center">
-                            
-                            {/* Logo */}
                             <Link href="/" className="flex items-center gap-2">
                                 <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center transform rotate-3">
                                     <span className="text-white font-bold text-xl">+</span>
                                 </div>
-                                <span className="text-2xl font-bold tracking-tight text-white">
-                                    Medi<span className="text-teal-400">Flow</span>
-                                </span>
+                                <span className="text-2xl font-bold tracking-tight text-white">Medi<span className="text-teal-400">Flow</span></span>
                             </Link>
-
-                            {/* Center Links (Home Page Style - No "Doctors" Tab) */}
                             <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-300">
                                 <Link href="/" className="hover:text-teal-400 transition">Home</Link>
                                 <a href="/#services" className="hover:text-teal-400 transition">Services</a>
-                                <a href="/#about" className="hover:text-teal-400 transition">About</a>
-                                <a href="/#contact" className="hover:text-teal-400 transition">Contact</a>
                             </div>
-
-                            {/* Right Actions: User Profile & Logout */}
                             <div className="flex items-center gap-4">
-                                <div className="text-right hidden sm:block">
-                                    <p className="text-sm text-slate-400">Welcome,</p>
-                                    <p className="text-sm font-bold text-white">{auth.user.name}</p>
+                                <div className="flex items-center gap-3 bg-slate-800/50 py-1.5 px-3 rounded-full border border-white/10">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                        {auth.user.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="text-left hidden sm:block pr-2">
+                                        <p className="text-[10px] uppercase tracking-wider text-slate-400 leading-none mb-0.5">Patient</p>
+                                        <p className="text-sm font-bold text-white leading-none">{auth.user.name}</p>
+                                    </div>
                                 </div>
-
                                 <form onSubmit={handleLogout}>
-                                    <button 
-                                        type="submit"
-                                        className="px-5 py-2 bg-slate-800 border border-white/10 text-white rounded-full text-sm font-bold hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 transition"
-                                    >
-                                        Log Out
+                                    <button className="p-2 bg-slate-800 border border-white/10 text-slate-300 rounded-full hover:bg-red-500/10 hover:text-red-400 transition">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                                     </button>
                                 </form>
                             </div>
@@ -96,116 +132,144 @@ export default function PatientDashboard({ auth, schedules, filters }) {
                     </div>
                 </nav>
 
-                {/* --- CONTENT SECTION --- */}
                 <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                    
-                    {/* Header & Search */}
-                    <div className="text-center mb-16">
-                        <h1 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
-                            Find Your <span className="text-teal-400">Specialist</span>
-                        </h1>
-                        <p className="text-slate-400 mb-10 text-lg max-w-2xl mx-auto">
-                            Browse our roster of top-tier medical professionals and book your consultation instantly.
-                        </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                        
+                        {/* --- LEFT COL: FILTERS --- */}
+                        <div className="lg:col-span-1 space-y-8">
+                            {/* Categories */}
+                            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
+                                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><span>🩺</span> Specialties</h3>
+                                <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {specialties && specialties.length > 0 ? (
+                                        specialties.map((cat, idx) => (
+                                            <button key={idx} onClick={() => { setSelectedCategory(cat === selectedCategory ? null : cat); setSelectedDate(null); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition flex justify-between items-center ${selectedCategory === cat ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                                                {cat}
+                                                {selectedCategory === cat && <span>✓</span>}
+                                            </button>
+                                        ))
+                                    ) : ( <p className="text-xs text-slate-500 italic">No specialties found.</p> )}
+                                </div>
+                            </div>
 
-                        {/* Search Bar */}
-                        <div className="relative max-w-2xl mx-auto group">
-                            <div className="absolute inset-0 bg-teal-500/20 rounded-full blur-xl group-hover:bg-teal-500/30 transition duration-500"></div>
-                            <input 
-                                type="text" 
-                                placeholder="Search by Doctor Name or Specialization..." 
-                                className="relative w-full bg-white/5 border border-white/10 text-white rounded-full py-4 pl-14 pr-4 focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white/10 transition backdrop-blur-md shadow-2xl placeholder-slate-500 text-lg"
-                                value={searchTerm}
-                                onChange={handleTyping}
-                                onKeyDown={handleKeyDown}
-                            />
-                            <button 
-                                onClick={triggerSearch}
-                                className="absolute left-5 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-teal-400 transition z-10"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                </svg>
-                            </button>
+                            {/* Calendar */}
+                            <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl transition-opacity ${!selectedCategory ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-bold text-white">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition">◀</button>
+                                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition">▶</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-7 text-center mb-2">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <span key={d} className="text-xs font-bold text-slate-500 uppercase">{d}</span>)}</div>
+                                <div className="grid grid-cols-7 gap-2">
+                                    {padDays.map((_, i) => <div key={`pad-${i}`} />)}
+                                    {daysInMonth.map((dayObj, i) => {
+                                        const isAvailable = isDayAvailable(dayObj);
+                                        const isSelected = selectedDate && dayObj.toDateString() === selectedDate.toDateString();
+                                        return (
+                                            <button key={i} disabled={!isAvailable} onClick={() => setSelectedDate(isSelected ? null : dayObj)} className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold transition relative mx-auto ${isSelected ? 'bg-teal-500 text-slate-900 shadow-lg scale-110' : ''} ${!isSelected && isAvailable ? 'bg-white/10 text-white hover:bg-white/20' : ''} ${!isSelected && !isAvailable ? 'text-slate-600 cursor-not-allowed' : ''}`}>
+                                                {dayObj.getDate()}
+                                                {!isSelected && isAvailable && <span className="absolute -bottom-1 w-1 h-1 bg-green-500 rounded-full"></span>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Doctor Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {schedules.map(schedule => (
-                            <div key={schedule.id} className="relative bg-white/5 backdrop-blur-lg border border-white/10 rounded-3xl p-6 hover:bg-white/10 hover:border-teal-500/50 transition duration-300 group shadow-lg flex flex-col">
-                                
-                                {/* Image */}
-                                <div className="flex justify-center mb-6">
-                                    <div className="relative">
-                                        <div className="absolute inset-0 bg-teal-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                                        {schedule.doctor.image ? (
-                                            <img 
-                                                src={`/storage/${schedule.doctor.image}`} 
-                                                alt="Doctor" 
-                                                className="relative h-28 w-28 rounded-full object-cover border-4 border-slate-800 shadow-xl group-hover:scale-105 transition duration-300"
-                                            />
-                                        ) : (
-                                            <div className="relative h-28 w-28 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-2xl border-4 border-slate-700">
-                                                DR
+                        {/* --- RIGHT COL: RESULTS --- */}
+                        <div className="lg:col-span-3">
+                            
+                            {/* Header / Search */}
+                            {selectedCategory && (
+                                <div className="mb-8 animate-in fade-in slide-in-from-top-4">
+                                    <div className="relative group max-w-xl">
+                                        <div className="absolute inset-0 bg-teal-500/20 rounded-full blur-xl group-hover:bg-teal-500/30 transition"></div>
+                                        <input type="text" placeholder={`Search ${selectedCategory}s by Name...`} className="relative w-full bg-white/5 border border-white/10 text-white rounded-full py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-teal-500 outline-none transition backdrop-blur-md shadow-2xl placeholder-slate-500" value={searchTerm} onChange={handleTyping} />
+                                        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* DOCTOR LIST */}
+                            {!selectedCategory ? (
+                                <div className="h-full flex flex-col items-center justify-center bg-white/5 border border-white/5 border-dashed rounded-3xl p-12 text-center min-h-[400px]">
+                                    <div className="text-6xl mb-6 opacity-30 animate-pulse">👈</div>
+                                    <h2 className="text-3xl font-bold text-white mb-2">Select a Specialty</h2>
+                                    <p className="text-slate-400 max-w-md">Choose a category to view specialists.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                                    {filteredDoctors.map(doctor => (
+                                        <div key={doctor.id} className="relative bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-teal-500/30 transition duration-300 group shadow-lg flex flex-col items-center text-center">
+                                            
+                                            {/* Doctor Photo */}
+                                            <div className="relative mb-4">
+                                                {doctor.image ? (<img src={`/storage/${doctor.image}`} alt="Doctor" className="h-24 w-24 rounded-full object-cover border-4 border-slate-800 shadow-xl" />) : (<div className="h-24 w-24 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-2xl border-4 border-slate-700">DR</div>)}
+                                                {/* Green Dot if ANY schedule exists, Gray if none */}
+                                                <div className={`absolute bottom-1 right-1 w-5 h-5 border-4 border-slate-900 rounded-full ${doctor.schedules.length > 0 ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                                             </div>
-                                        )}
-                                        <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-slate-900 rounded-full z-10"></div>
-                                    </div>
+
+                                            <h3 className="text-xl font-bold text-white mb-1">{doctor.user.name}</h3>
+                                            <span className="text-xs font-bold uppercase tracking-wider text-teal-400 mb-4">{doctor.specialization}</span>
+                                            
+                                            {/* Schedule List */}
+                                            <div className="w-full bg-slate-950/30 rounded-xl p-3 mb-4 text-sm text-slate-300 space-y-2 border border-white/5 min-h-[100px] flex flex-col justify-center">
+                                                {doctor.schedules.length > 0 ? (
+                                                    // Filter schedules if a date is selected, otherwise show all
+                                                    doctor.schedules
+                                                    .filter(s => !selectedDate || s.day === weekDays[selectedDate.getDay()])
+                                                    .map(schedule => (
+                                                        <div key={schedule.id} className="flex justify-between border-b border-white/5 last:border-0 pb-1 last:pb-0">
+                                                            <span className="text-white font-medium">{schedule.day}</span>
+                                                            <div className="text-right">
+                                                                <span className="text-teal-400 font-bold block">{schedule.start_time} - {schedule.end_time}</span>
+                                                                <span className="text-[10px] text-slate-500 block truncate max-w-[80px]">{schedule.hospital.name}</span>
+                                                            </div>
+                                                            {/* Hidden Booking Button Trigger */}
+                                                            <button onClick={() => handleBook(schedule.id)} className="hidden"></button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-xs text-slate-500 italic">No availability slots added yet.</p>
+                                                )}
+                                                {/* Message if filtered by date but no slot on THAT day */}
+                                                {selectedDate && doctor.schedules.length > 0 && !doctor.schedules.some(s => s.day === weekDays[selectedDate.getDay()]) && (
+                                                    <p className="text-xs text-red-400">Not available on {weekDays[selectedDate.getDay()]}</p>
+                                                )}
+                                            </div>
+
+                                            {/* Action Button */}
+                                            {doctor.schedules.length > 0 ? (
+                                                <button 
+                                                    // Finds the first valid schedule ID to trigger booking
+                                                    onClick={() => {
+                                                        const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]);
+                                                        if (validSchedule) handleBook(validSchedule.id);
+                                                        else alert("Please select a valid date/time.");
+                                                    }}
+                                                    className="w-full py-2.5 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-lg font-bold hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition"
+                                                >
+                                                    Book {selectedDate ? selectedDate.toLocaleDateString() : 'Appointment'}
+                                                </button>
+                                            ) : (
+                                                <button disabled className="w-full py-2.5 bg-slate-800 text-slate-500 rounded-lg font-bold cursor-not-allowed border border-white/5">
+                                                    Unavailable
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {filteredDoctors.length === 0 && (
+                                        <div className="col-span-full text-center py-20">
+                                            <p className="text-slate-500 text-lg">No doctors found.</p>
+                                            <button onClick={() => {setSelectedDate(null); setSearchTerm('')}} className="text-teal-400 underline mt-2">Reset Filters</button>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Content */}
-                                <div className="text-center flex-1 flex flex-col">
-                                    <h3 className="text-xl font-bold text-white mb-2">{schedule.doctor.user.name}</h3>
-                                    <div className="mb-6">
-                                        <span className="inline-block px-3 py-1 bg-teal-500/10 text-teal-400 rounded-full text-xs font-bold uppercase tracking-wide border border-teal-500/20">
-                                            {schedule.doctor.specialization}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="bg-slate-950/50 rounded-xl p-4 mb-6 border border-white/5 text-sm text-slate-300 text-left space-y-3 shadow-inner">
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                            <span className="text-slate-500 text-xs uppercase font-bold">Hospital</span> 
-                                            <span className="font-semibold text-white">{schedule.hospital.name}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                            <span className="text-slate-500 text-xs uppercase font-bold">Day</span> 
-                                            <span className="font-semibold text-white">{schedule.day}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500 text-xs uppercase font-bold">Time</span> 
-                                            <span className="font-bold text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded">{schedule.start_time} - {schedule.end_time}</span>
-                                        </div>
-                                    </div>
-
-                                    <button 
-                                        onClick={() => handleBook(schedule.id)}
-                                        className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-xl font-bold hover:shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-auto"
-                                    >
-                                        Book Appointment
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-
-                        {/* Empty State */}
-                        {schedules.length === 0 && (
-                            <div className="col-span-1 md:col-span-3 text-center py-20 bg-white/5 rounded-3xl border border-white/5 border-dashed">
-                                <div className="text-6xl mb-4 opacity-50">🔍</div>
-                                <h3 className="text-2xl font-bold text-white">No Doctors Found</h3>
-                                <p className="text-slate-400 mt-2 max-w-md mx-auto">
-                                    We couldn't find any doctors matching "{searchTerm}".
-                                </p>
-                                {searchTerm && (
-                                    <button 
-                                        onClick={() => { setSearchTerm(''); router.get(route('dashboard')); }}
-                                        className="mt-6 px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition border border-white/10"
-                                    >
-                                        Clear Search
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -5,15 +5,19 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Controllers
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\AppointmentController;
+
+// Models
+use App\Models\User;
 use App\Models\Hospital;
 use App\Models\Schedule;
 use App\Models\Appointment;
 use App\Models\Doctor;
 
-// --- 1. LANDING PAGE (Public) ---
+// --- 1. LANDING PAGE ---
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
@@ -23,74 +27,84 @@ Route::get('/', function () {
     ]);
 });
 
-// --- 2. DASHBOARD (Protected & Role-Based) ---
+// --- 2. MAIN DASHBOARD ---
 Route::get('/dashboard', function () {
-    $role = auth()->user()->role;
+    $user = auth()->user();
+    $role = $user->role;
 
-    // A. Admin View
+    // A. ADMIN VIEW
     if ($role === 'admin') {
-        return Inertia::render('AdminDashboard');
+        return Inertia::render('AdminDashboard', [
+            'doctors' => Doctor::with('user')->get(),
+            'patients' => User::where('role', 'patient')->get(),
+            'appointments' => Appointment::with(['user', 'doctor.user', 'schedule'])->get(),
+            'stats' => [
+                'total_doctors' => Doctor::count(),
+                'total_patients' => User::where('role', 'patient')->count(),
+                'total_appointments' => Appointment::count(),
+            ]
+        ]);
     
-    // B. Doctor View
+    // B. DOCTOR VIEW
     } elseif ($role === 'doctor') {
         $doctor = Doctor::where('user_id', auth()->id())->first();
         $hospitals = Hospital::all();
-        
-        $appointments = []; 
-
-        if ($doctor) {
-            $appointments = Appointment::where('doctor_id', $doctor->id)
-                ->with(['user', 'schedule']) 
-                ->get();
-        }
+        $appointments = $doctor 
+            ? Appointment::where('doctor_id', $doctor->id)->with(['user', 'schedule'])->get() 
+            : [];
         
         return Inertia::render('DoctorDashboard', [
             'hospitals' => $hospitals,
             'appointments' => $appointments,
         ]);
 
-    // C. Patient View
+    // C. PATIENT VIEW (✅ UPDATED TO SEND DOCTORS)
     } else {
-        // Search Logic
         $search = request('search');
 
-        $schedules = Schedule::with(['doctor.user', 'hospital'])
+        // 1. Fetch DOCTORS (with their User info and Schedules)
+        // We load 'schedules.hospital' so we can display hospital names in the calendar list
+        $doctors = Doctor::with(['user', 'schedules.hospital'])
             ->when($search, function ($query, $search) {
-                return $query->whereHas('doctor', function ($q) use ($search) {
-                    $q->where('specialization', 'like', "%{$search}%")
+                return $query->where('specialization', 'like', "%{$search}%")
                       ->orWhereHas('user', function ($q2) use ($search) {
                           $q2->where('name', 'like', "%{$search}%");
                       });
-                });
             })
             ->get();
 
+        // 2. Fetch Categories
+        $specialties = Doctor::select('specialization')
+            ->distinct()
+            ->whereNotNull('specialization')
+            ->orderBy('specialization', 'asc')
+            ->pluck('specialization');
+
         return Inertia::render('PatientDashboard', [
-            'schedules' => $schedules,
+            'doctors' => $doctors,      // ✅ Sending 'doctors' instead of 'schedules'
+            'specialties' => $specialties,
             'filters' => request()->only(['search']),
         ]);
     }
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// --- 3. DOCTOR ACTIONS ---
-Route::post('/doctors', [DoctorController::class, 'store'])
-    ->middleware(['auth', 'verified'])
-    ->name('doctors.store');
+// --- 3. ACTIONS ---
+Route::delete('/users/{id}', function ($id) {
+    User::findOrFail($id)->delete();
+    return redirect()->back();
+})->middleware(['auth', 'verified'])->name('users.destroy');
 
-Route::post('/schedules', [ScheduleController::class, 'store'])
-    ->middleware(['auth', 'verified'])
-    ->name('schedules.store');
+Route::delete('/appointments/{id}', function ($id) {
+    Appointment::findOrFail($id)->delete();
+    return redirect()->back();
+})->middleware(['auth', 'verified'])->name('appointments.destroy');
 
-Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])
-    ->middleware(['auth', 'verified'])
-    ->name('appointments.status');
+Route::post('/doctors', [DoctorController::class, 'store'])->middleware(['auth', 'verified'])->name('doctors.store');
+Route::post('/schedules', [ScheduleController::class, 'store'])->middleware(['auth', 'verified'])->name('schedules.store');
+Route::post('/appointments', [AppointmentController::class, 'store'])->middleware(['auth', 'verified'])->name('appointments.store');
+Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->middleware(['auth', 'verified'])->name('appointments.status');
 
-// --- 4. PATIENT ACTIONS ---
-Route::post('/appointments', [AppointmentController::class, 'store'])
-    ->middleware(['auth', 'verified'])
-    ->name('appointments.store');
-
-// --- 5. PROFILE SETTINGS (Default Laravel) ---
+// --- 4. PROFILE ---
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

@@ -13,12 +13,26 @@ class Doctor extends Model
         'user_id',
         'specialization',
         'bio',
-        'image', // <--- Add this line
+        'image',
     ];
 
-    // Optional but helpful: Tell Laravel that a Doctor belongs to a User
+    // 1. Link to the User Account (Name, Email, Password)
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // 2. ✅ THE FIX: Link to Schedules
+    // This tells Laravel: "One Doctor has many Schedules"
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    // 3. Link to Appointments
+    // This tells Laravel: "One Doctor has many Appointments"
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
     }
 }
