@@ -59,7 +59,7 @@ export default function DoctorDashboard({ auth, hospitals, appointments }) {
                                 <Link href="/" className="hover:text-teal-400 transition">Home</Link>
                                 <a href="/#services" className="hover:text-teal-400 transition">Services</a>
                                 <a href="/#about" className="hover:text-teal-400 transition">About</a>
-                                <a href="/#contact" className="hover:text-teal-400 transition">Contact</a>
+                                <Link href={route('contact')} className="hover:text-teal-400 transition">Contact</Link>
                             </div>
 
                             {/* Right Actions: Doctor Profile & Logout */}

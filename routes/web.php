@@ -27,7 +27,17 @@ Route::get('/', function () {
     ]);
 });
 
-// --- 2. MAIN DASHBOARD ---
+// --- 2. CONTACT PAGE (✅ UPDATED: Now sends 'hospitals' to frontend) ---
+Route::get('/contact', function () {
+    return Inertia::render('Contact', [
+        'canLogin' => Route::has('login'),
+        // Fetch all hospitals sorted A-Z for the directory list
+        'hospitals' => Hospital::orderBy('name', 'asc')->get() 
+    ]);
+})->name('contact');
+
+
+// --- 3. MAIN DASHBOARD ---
 Route::get('/dashboard', function () {
     $user = auth()->user();
     $role = $user->role;
@@ -58,12 +68,11 @@ Route::get('/dashboard', function () {
             'appointments' => $appointments,
         ]);
 
-    // C. PATIENT VIEW (✅ UPDATED TO SEND DOCTORS)
+    // C. PATIENT VIEW
     } else {
         $search = request('search');
 
         // 1. Fetch DOCTORS (with their User info and Schedules)
-        // We load 'schedules.hospital' so we can display hospital names in the calendar list
         $doctors = Doctor::with(['user', 'schedules.hospital'])
             ->when($search, function ($query, $search) {
                 return $query->where('specialization', 'like', "%{$search}%")
@@ -81,14 +90,14 @@ Route::get('/dashboard', function () {
             ->pluck('specialization');
 
         return Inertia::render('PatientDashboard', [
-            'doctors' => $doctors,      // ✅ Sending 'doctors' instead of 'schedules'
+            'doctors' => $doctors,
             'specialties' => $specialties,
             'filters' => request()->only(['search']),
         ]);
     }
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// --- 3. ACTIONS ---
+// --- 4. ACTIONS ---
 Route::delete('/users/{id}', function ($id) {
     User::findOrFail($id)->delete();
     return redirect()->back();
@@ -104,7 +113,7 @@ Route::post('/schedules', [ScheduleController::class, 'store'])->middleware(['au
 Route::post('/appointments', [AppointmentController::class, 'store'])->middleware(['auth', 'verified'])->name('appointments.store');
 Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->middleware(['auth', 'verified'])->name('appointments.status');
 
-// --- 4. PROFILE ---
+// --- 5. PROFILE ---
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
