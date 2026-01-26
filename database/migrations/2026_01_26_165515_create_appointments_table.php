@@ -12,13 +12,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('appointments', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('user_id')->constrained()->onDelete('cascade'); // The Patient
-        $table->foreignId('doctor_id')->constrained()->onDelete('cascade'); // The Doctor
-        $table->foreignId('schedule_id')->constrained()->onDelete('cascade'); // The specific time slot
-        $table->date('date'); // The calendar date (e.g., 2023-10-25)
-        $table->enum('status', ['pending', 'confirmed', 'cancelled'])->default('pending');
-        $table->timestamps();
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade'); // The Patient
+            $table->foreignId('doctor_id')->constrained()->onDelete('cascade'); // The Doctor
+            $table->foreignId('schedule_id')->constrained()->onDelete('cascade'); // The specific time slot
+            $table->date('date'); // The calendar date (e.g., 2023-10-25)
+            
+            // ✅ UPDATED: Added 'completed' to the list
+            $table->enum('status', ['pending', 'confirmed', 'cancelled', 'completed'])->default('pending');
+            
+            $table->timestamps();
         });
     }
 

@@ -31,12 +31,12 @@ class AppointmentController extends Controller
         return redirect()->back()->with('message', 'Appointment Booked Successfully!');
     }
 
-    // ✅ NEW: Handle Confirm/Cancel actions
+    // ✅ UPDATED: Handle Confirm, Cancel, AND Complete actions
     public function updateStatus(Request $request, $id)
     {
-        // 1. Validate that the status is either 'confirmed' or 'cancelled'
+        // 1. Validate: We added 'completed' to this list
         $request->validate([
-            'status' => 'required|in:confirmed,cancelled'
+            'status' => 'required|in:confirmed,cancelled,completed'
         ]);
 
         // 2. Find the appointment

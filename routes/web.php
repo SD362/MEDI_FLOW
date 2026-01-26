@@ -35,7 +35,7 @@ Route::get('/contact', function () {
     ]);
 })->name('contact');
 
-// --- 3. PUBLIC SPECIALISTS DIRECTORY (✅ NEW ROUTE ADDED HERE) ---
+// --- 3. PUBLIC SPECIALISTS DIRECTORY ---
 Route::get('/specialists', function () {
     return Inertia::render('Specialists', [
         'canLogin' => Route::has('login'),
@@ -70,17 +70,26 @@ Route::get('/dashboard', function () {
             ]
         ]);
     
-    // B. DOCTOR VIEW
+    // B. DOCTOR VIEW (✅ UPDATED SECTION)
     } elseif ($role === 'doctor') {
         $doctor = Doctor::where('user_id', auth()->id())->first();
         $hospitals = Hospital::all();
+        
+        // 1. Fetch Appointments
         $appointments = $doctor 
-            ? Appointment::where('doctor_id', $doctor->id)->with(['user', 'schedule'])->get() 
+            ? Appointment::where('doctor_id', $doctor->id)->with(['user', 'schedule.hospital'])->get() 
+            : [];
+
+        // 2. ✅ NEW: Fetch the Doctor's Active Schedules (Slots)
+        // This is what was missing! Now the dashboard can list the slots you created.
+        $mySchedules = $doctor
+            ? Schedule::where('doctor_id', $doctor->id)->with('hospital')->get()
             : [];
         
         return Inertia::render('DoctorDashboard', [
             'hospitals' => $hospitals,
             'appointments' => $appointments,
+            'mySchedules' => $mySchedules, // Pass this to the frontend
         ]);
 
     // C. PATIENT VIEW
@@ -107,7 +116,7 @@ Route::get('/dashboard', function () {
         return Inertia::render('PatientDashboard', [
             'doctors' => $doctors,
             'specialties' => $specialties,
-            'filters' => request()->only(['search']),
+            'filters' => request()->only(['search', 'doctor_id']),
         ]);
     }
 })->middleware(['auth', 'verified'])->name('dashboard');

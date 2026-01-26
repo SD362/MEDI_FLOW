@@ -9,6 +9,7 @@ class Schedule extends Model
 {
     use HasFactory;
 
+    // ✅ THIS IS REQUIRED TO SAVE DATA
     protected $fillable = [
         'doctor_id',
         'hospital_id',
@@ -17,12 +18,13 @@ class Schedule extends Model
         'end_time',
     ];
 
-    // ✅ THIS WAS MISSING
-    public function doctor() {
+    public function doctor()
+    {
         return $this->belongsTo(Doctor::class);
     }
 
-    public function hospital() {
+    public function hospital()
+    {
         return $this->belongsTo(Hospital::class);
     }
 }

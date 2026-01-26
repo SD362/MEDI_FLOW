@@ -13,6 +13,11 @@ class ScheduleController extends Controller
         // 1. Get the logged-in user's Doctor Profile
         $doctor = Doctor::where('user_id', auth()->id())->first();
 
+        // ✅ SAFETY CHECK: If no doctor profile exists, stop here (prevents crash)
+        if (!$doctor) {
+            return redirect()->back()->withErrors(['error' => 'Doctor profile not found.']);
+        }
+
         // 2. Validate
         $request->validate([
             'hospital_id' => 'required|exists:hospitals,id',
@@ -30,6 +35,7 @@ class ScheduleController extends Controller
             'end_time' => $request->end_time,
         ]);
 
-        return redirect()->back();
+        // ✅ Return with success message
+        return redirect()->back()->with('message', 'Slot added successfully!');
     }
 }

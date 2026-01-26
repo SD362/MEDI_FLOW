@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function Contact({ auth, hospitals }) { // ✅ Accepts 'hospitals' from DB
+export default function Contact({ auth, hospitals }) { 
     
     // Search state for the hospital list
     const [search, setSearch] = useState('');
@@ -32,9 +32,12 @@ export default function Contact({ auth, hospitals }) { // ✅ Accepts 'hospitals
                                 </span>
                             </Link>
 
+                            {/* ✅ UPDATED NAVIGATION LINKS */}
                             <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-300">
                                 <Link href="/" className="hover:text-teal-400 transition">Home</Link>
                                 <Link href={route('dashboard')} className="hover:text-teal-400 transition">Doctors</Link>
+                                {/* ✅ ADDED SERVICES TAB */}
+                                <a href="/#services" className="hover:text-teal-400 transition">Services</a>
                                 <span className="text-teal-400 font-bold border-b-2 border-teal-400 pb-1">Contact</span>
                             </div>
 
@@ -64,11 +67,11 @@ export default function Contact({ auth, hospitals }) { // ✅ Accepts 'hospitals
                         {/* LEFT: MAP & DIRECTORY */}
                         <div className="space-y-8">
                             
-                            {/* Embedded Map: Searches for "Government Hospitals Sri Lanka" */}
+                            {/* Embedded Map */}
                             <div className="bg-white/5 p-2 rounded-3xl border border-white/10 shadow-2xl h-[400px] relative overflow-hidden group">
                                 <iframe 
                                     className="w-full h-full rounded-2xl relative z-10 grayscale hover:grayscale-0 transition duration-700"
-                                    src="https://www.google.com/maps/embed?pb=!1m16!1m12!1m3!1d1980356.5478263125!2d79.8606872!3d7.8730542!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sGovernment%20Hospitals%20Sri%20Lanka!5e0!3m2!1sen!2slk!4v1700000000000!5m2!1sen!2slk"
+                                    src="https://www.google.com/maps/embed?pb=!1m16!1m12!1m3!1d1013481.5658828775!2d79.80802758123985!3d7.136284758532457!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sgovernment%20hospitals%20sri%20lanka!5e0!3m2!1sen!2slk!4v1700000000000!5m2!1sen!2slk"
                                     allowFullScreen="" 
                                     loading="lazy" 
                                     referrerPolicy="no-referrer-when-downgrade"
