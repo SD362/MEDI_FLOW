@@ -11,31 +11,39 @@ class DoctorController extends Controller
 {
     public function store(Request $request)
     {
-        // 1. Validate the form data
+        // 1. Validate
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8',
             'specialization' => 'required|string',
             'bio' => 'nullable|string',
+            'image' => 'nullable|image|max:2048', // Max 2MB file
         ]);
 
-        // 2. Create the User Login Account (Role = Doctor)
+        // 2. Handle Image Upload
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            // This saves the file into 'storage/app/public/doctors'
+            $imagePath = $request->file('image')->store('doctors', 'public'); 
+        }
+
+        // 3. Create User Login
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => \Illuminate\Support\Facades\Hash::make($request->password),
             'role' => 'doctor',
         ]);
 
-        // 3. Create the Doctor Profile linked to that User
-        Doctor::create([
+        // 4. Create Doctor Profile (with Image)
+        \App\Models\Doctor::create([
             'user_id' => $user->id,
             'specialization' => $request->specialization,
             'bio' => $request->bio,
+            'image' => $imagePath, // Save the file path to database
         ]);
 
-        // 4. Go back to dashboard with success message
         return redirect()->back()->with('message', 'Doctor created successfully!');
     }
 }

@@ -30,4 +30,24 @@ class AppointmentController extends Controller
 
         return redirect()->back()->with('message', 'Appointment Booked Successfully!');
     }
+
+    // ✅ NEW: Handle Confirm/Cancel actions
+    public function updateStatus(Request $request, $id)
+    {
+        // 1. Validate that the status is either 'confirmed' or 'cancelled'
+        $request->validate([
+            'status' => 'required|in:confirmed,cancelled'
+        ]);
+
+        // 2. Find the appointment
+        $appointment = Appointment::findOrFail($id);
+
+        // 3. Update the status
+        $appointment->update([
+            'status' => $request->status
+        ]);
+
+        // 4. Go back to the dashboard
+        return redirect()->back()->with('message', 'Appointment status updated!');
+    }
 }

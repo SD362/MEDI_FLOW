@@ -9,12 +9,11 @@ class Doctor extends Model
 {
     use HasFactory;
 
-    // ✅ ADD THIS SECTION
     protected $fillable = [
         'user_id',
         'specialization',
         'bio',
-        'license_number'
+        'image', // <--- Add this line
     ];
 
     // Optional but helpful: Tell Laravel that a Doctor belongs to a User

@@ -9,11 +9,13 @@ export default function AdminDashboard({ auth }) {
         password: '',
         specialization: '',
         bio: '',
+        image: null,
     });
 
     const submit = (e) => {
         e.preventDefault();
         post(route('doctors.store'), {
+            forceFormData: true,
             onSuccess: () => reset(), // Clear form after success
         });
     };
@@ -77,7 +79,7 @@ export default function AdminDashboard({ auth }) {
 
                             {/* Specialization */}
                             <div>
-                                <label className="block font-medium text-sm text-gray-700">Specialization (e.g., Dentist)</label>
+                                <label className="block font-medium text-sm text-gray-700"> ialization (e.g., Dentist)</label>
                                 <input 
                                     type="text" 
                                     className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full"
@@ -85,6 +87,16 @@ export default function AdminDashboard({ auth }) {
                                     onChange={(e) => setData('specialization', e.target.value)}
                                 />
                                 {errors.specialization && <div className="text-red-500 text-sm">{errors.specialization}</div>}
+                            </div>
+                            {/* Profile Image Input */}
+                            <div>
+                                <label className="block font-medium text-sm text-gray-700">Profile Photo</label>
+                                <input 
+                                    type="file" 
+                                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    onChange={(e) => setData('image', e.target.files[0])} // <--- Grabs the file
+                                />
+                                {errors.image && <div className="text-red-500 text-sm">{errors.image}</div>}
                             </div>
 
                             {/* Submit Button */}
