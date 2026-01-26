@@ -27,17 +27,32 @@ Route::get('/', function () {
     ]);
 });
 
-// --- 2. CONTACT PAGE (✅ UPDATED: Now sends 'hospitals' to frontend) ---
+// --- 2. CONTACT PAGE ---
 Route::get('/contact', function () {
     return Inertia::render('Contact', [
         'canLogin' => Route::has('login'),
-        // Fetch all hospitals sorted A-Z for the directory list
         'hospitals' => Hospital::orderBy('name', 'asc')->get() 
     ]);
 })->name('contact');
 
+// --- 3. PUBLIC SPECIALISTS DIRECTORY (✅ NEW ROUTE ADDED HERE) ---
+Route::get('/specialists', function () {
+    return Inertia::render('Specialists', [
+        'canLogin' => Route::has('login'),
+        'canRegister' => Route::has('register'),
+        // Fetch all doctors to show to the public
+        'doctors' => Doctor::with(['user', 'schedules.hospital'])->get(),
+        // Fetch categories for filtering
+        'specialties' => Doctor::select('specialization')
+            ->distinct()
+            ->whereNotNull('specialization')
+            ->orderBy('specialization', 'asc')
+            ->pluck('specialization')
+    ]);
+})->name('specialists');
 
-// --- 3. MAIN DASHBOARD ---
+
+// --- 4. MAIN DASHBOARD ---
 Route::get('/dashboard', function () {
     $user = auth()->user();
     $role = $user->role;
@@ -97,7 +112,7 @@ Route::get('/dashboard', function () {
     }
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// --- 4. ACTIONS ---
+// --- 5. ACTIONS ---
 Route::delete('/users/{id}', function ($id) {
     User::findOrFail($id)->delete();
     return redirect()->back();
@@ -113,7 +128,7 @@ Route::post('/schedules', [ScheduleController::class, 'store'])->middleware(['au
 Route::post('/appointments', [AppointmentController::class, 'store'])->middleware(['auth', 'verified'])->name('appointments.store');
 Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->middleware(['auth', 'verified'])->name('appointments.status');
 
-// --- 5. PROFILE ---
+// --- 6. PROFILE ---
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

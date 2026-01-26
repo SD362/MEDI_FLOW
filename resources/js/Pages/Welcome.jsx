@@ -25,15 +25,16 @@ export default function Welcome({ auth }) {
 
                             {/* Center Links (Hidden on mobile) */}
                             <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-300">
-                                <a href="#home" className="hover:text-teal-400 transition">Home</a>
+                                <Link href="/" className="hover:text-teal-400 transition">Home</Link>
                                 
-                                {/* ✅ UPDATED: Now links to the Dashboard/Doctor List */}
-                                <Link href={route('dashboard')} className="hover:text-teal-400 transition">
+                                {/* ✅ UPDATED: Links to the Public Specialists Directory */}
+                                <Link href={route('specialists')} className="hover:text-teal-400 transition">
                                     Doctors
                                 </Link>
                                 
                                 <a href="#services" className="hover:text-teal-400 transition">Services</a>
-                                <a href="#about" className="hover:text-teal-400 transition">About</a>
+                                
+                                {/* ✅ UPDATED: Links to the Contact Map Page */}
                                 <Link href={route('contact')} className="hover:text-teal-400 transition">Contact</Link>
                             </div>
 
@@ -98,9 +99,14 @@ export default function Welcome({ auth }) {
                                 >
                                     Book Appointment
                                 </Link>
-                                <button className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-full font-bold text-lg hover:bg-white/10 transition backdrop-blur-sm">
+                                
+                                {/* ✅ UPDATED: "View Specialists" Button now works */}
+                                <Link 
+                                    href={route('specialists')}
+                                    className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-full font-bold text-lg hover:bg-white/10 transition backdrop-blur-sm"
+                                >
                                     View Specialists
-                                </button>
+                                </Link>
                             </div>
                         </div>
 
