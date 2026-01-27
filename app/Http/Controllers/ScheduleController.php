@@ -36,6 +36,21 @@ class ScheduleController extends Controller
         ]);
 
         // ✅ Return with success message
-        return redirect()->back()->with('message', 'Slot added successfully!');
+        return redirect()->back()->with('message', 'Availability slot added successfully!');
     }
+
+    public function destroy($id)
+    {
+        $schedule = Schedule::findOrFail($id);
+
+        // Security check: Ensure only the doctor who owns the slot can delete it
+        if ($schedule->doctor_id !== auth()->user()->doctor->id) {
+            return redirect()->back()->with('error', 'Unauthorized action.');
+        }
+
+        $schedule->delete();
+
+        return redirect()->back()->with('message', 'Availability removed successfully.');
+    }
+
 }

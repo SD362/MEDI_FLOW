@@ -5,23 +5,29 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Appointment;
 use App\Models\Schedule;
+use Inertia\Inertia;
 
+/**
+ * AppointmentController
+ * Orchestrates appointment lifecycles including creation, status transitions, and documentation.
+ */
 class AppointmentController extends Controller
 {
+    /**
+     * Action: Persists a new appointment request.
+     * Logic: Validates the schedule selection and ensures the date is set in the future.
+     */
     public function store(Request $request)
     {
-        // 1. Validate
         $request->validate([
             'schedule_id' => 'required|exists:schedules,id',
-            'date' => 'required|date|after:today', // Must book for future
+            'date' => 'required|date|after:today',
         ]);
 
-        // 2. Find the Schedule details to get the doctor_id
         $schedule = Schedule::findOrFail($request->schedule_id);
 
-        // 3. Create Appointment
         Appointment::create([
-            'user_id' => auth()->id(), // The logged-in patient
+            'user_id' => auth()->id(),
             'doctor_id' => $schedule->doctor_id,
             'schedule_id' => $schedule->id,
             'date' => $request->date,
@@ -31,23 +37,48 @@ class AppointmentController extends Controller
         return redirect()->back()->with('message', 'Appointment Booked Successfully!');
     }
 
-    // ✅ UPDATED: Handle Confirm, Cancel, AND Complete actions
+    /**
+     * Action: Transitions appointment status (Confirm/Cancel/Complete).
+     * Logic: Includes a security check to ensure patients can only cancel their own records.
+     */
     public function updateStatus(Request $request, $id)
     {
-        // 1. Validate: We added 'completed' to this list
         $request->validate([
             'status' => 'required|in:confirmed,cancelled,completed'
         ]);
 
-        // 2. Find the appointment
         $appointment = Appointment::findOrFail($id);
 
-        // 3. Update the status
+        /**
+         * Security: Prevent unauthorized status changes.
+         * Ensures patients can only initiate a 'cancelled' status on their own bookings.
+         */
+        if (auth()->user()->role === 'patient' && $request->status === 'cancelled') {
+            if ($appointment->user_id !== auth()->id()) {
+                return redirect()->back()->with('error', 'Unauthorized action.');
+            }
+        }
+
         $appointment->update([
             'status' => $request->status
         ]);
 
-        // 4. Go back to the dashboard
-        return redirect()->back()->with('message', 'Appointment status updated!');
+        return redirect()->back()->with('message', 'Appointment status updated successfully!');
+    }
+
+    /**
+     * Action: Generates a printable clinical record.
+     * Logic: Restricts visibility to the owning patient and only for 'completed' visits.
+     */
+    public function showReceipt($id)
+    {
+        $appointment = Appointment::with(['doctor.user', 'schedule.hospital', 'user'])
+            ->where('user_id', auth()->id())
+            ->where('status', 'completed')
+            ->findOrFail($id);
+
+        return Inertia::render('AppointmentReceipt', [
+            'appointment' => $appointment
+        ]);
     }
 }

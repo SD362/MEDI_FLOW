@@ -1,51 +1,117 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 
-// ✅ Accepts 'mySchedules' from backend to list created slots
+/**
+ * DoctorDashboard Component
+ * Centralized clinical interface for medical practitioners.
+ * Orchestrates appointment lifecycles, professional profile synchronization,
+ * and multi-facility schedule management.
+ */
 export default function DoctorDashboard({ auth, appointments, hospitals, mySchedules }) {
 
-    // --- STATE ---
-    const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'history', or 'schedules'
+    const { flash } = usePage().props;
+    const [alertMessage, setAlertMessage] = useState(null);
+    const [activeTab, setActiveTab] = useState('upcoming');
     const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-    // --- FORM STATE ---
+    /**
+     * Professional Identity State
+     * logic: Uses Inertia useForm to handle multipart/form-data for image uploads.
+     */
+    const profileForm = useForm({
+        specialization: auth.user.doctor?.specialization || '',
+        bio: auth.user.doctor?.bio || '',
+        image: null,
+    });
+
+    /**
+     * Logistics & Scheduling State
+     * Coordinates availability slots across registered hospital facilities.
+     */
     const [scheduleData, setScheduleData] = useState({
-        hospital_id: hospitals.length > 0 ? hospitals[0].id : '',
+        hospital_id: hospitals && hospitals.length > 0 ? hospitals[0].id : '',
         day: 'Monday',
         start_time: '',
         end_time: '',
     });
 
-    // --- FILTERING LOGIC ---
+    /**
+     * Lifecycle: Session Feedback
+     * Monitors flash properties to trigger transient UI notifications.
+     */
+    useEffect(() => {
+        if (flash?.message) {
+            setAlertMessage(flash.message);
+            const timer = setTimeout(() => setAlertMessage(null), 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [flash]);
+
+    /**
+     * Logic: Temporal Dataset Segmentation
+     * Segregates appointments based on chronographic proximity and clinical status.
+     */
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const upcomingAppointments = appointments.filter(app => {
+    const upcomingAppointments = appointments?.filter(app => {
         const appDate = new Date(app.date);
         return (app.status === 'pending' || app.status === 'confirmed') && appDate >= today;
-    });
+    }) || [];
 
-    const appointmentHistory = appointments.filter(app => {
+    const appointmentHistory = appointments?.filter(app => {
         const appDate = new Date(app.date);
         return app.status === 'completed' || app.status === 'cancelled' || appDate < today;
-    });
+    }) || [];
 
-    // --- HANDLERS ---
+    /**
+     * Action: Appointment State Management
+     * Dispatches PATCH requests to transition consultation lifecycles.
+     */
     const handleStatus = (id, newStatus) => {
-        if (confirm(`Mark this appointment as ${newStatus}?`)) {
+        if (confirm(`Authorize status transition to: ${newStatus.toUpperCase()}?`)) {
             router.patch(route('appointments.status', id), { status: newStatus });
         }
     };
 
+    /**
+     * Action: Profile Synchronization
+     * Logic: Executes the form submission using multipart headers.
+     */
+    const submitProfile = (e) => {
+        e.preventDefault();
+        profileForm.post(route('doctor.profile.update'), {
+            forceFormData: true,
+            onSuccess: () => {
+                setIsProfileModalOpen(false);
+                profileForm.reset('image');
+            },
+        });
+    };
+
+    /**
+     * Action: Resource Provisioning
+     * Registers new clinical availability slots in the persistent store.
+     */
     const submitSchedule = (e) => {
         e.preventDefault();
         router.post(route('schedules.store'), scheduleData, {
             onSuccess: () => {
                 setIsWorkFormOpen(false);
-                setActiveTab('schedules'); // Auto-switch to the new tab to see your slot
-                alert("Availability Added Successfully!");
+                setActiveTab('schedules');
             }
         });
+    };
+
+    /**
+     * Action: Resource Decommissioning
+     * Permanently removes availability records while maintaining booking integrity.
+     */
+    const deleteSchedule = (id) => {
+        if (confirm("Permanently decommission this availability slot? Current bookings remain valid.")) {
+            router.delete(route('schedules.destroy', id));
+        }
     };
 
     const handleLogout = (e) => {
@@ -55,199 +121,257 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
 
     return (
         <>
-            <Head title="Doctor Dashboard" />
+            <Head title="Clinical Command Center" />
 
-            <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-teal-500 selection:text-white">
-                
-                {/* --- NAV BAR --- */}
-                <nav className="fixed w-full z-50 bg-slate-900/80 backdrop-blur-md border-b border-white/10">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="flex justify-between h-20 items-center">
-                            
-                            <Link href="/" className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center transform rotate-3">
-                                    <span className="text-white font-bold text-xl">+</span>
-                                </div>
-                                <span className="text-2xl font-bold tracking-tight text-white">
-                                    Medi<span className="text-teal-400">Flow</span> 
-                                </span>
-                            </Link>
+            <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-teal-500/30">
 
-                            {/* ✅ ADDED: Navigation Tabs for Doctor */}
-                            <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-300">
-                                <Link href="/" className="hover:text-teal-400 transition">Home</Link>
-                                <a href="/#services" className="hover:text-teal-400 transition">Services</a>
-                                <Link href={route('contact')} className="hover:text-teal-400 transition">Contact</Link>
+                {/* --- OPERATIONAL FEEDBACK --- */}
+                {alertMessage && (
+                    <div className="fixed z-[100] top-24 left-1/2 -translate-x-1/2 animate-in slide-in-from-top-4 duration-300">
+                        <div className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest bg-teal-500 border border-teal-400 shadow-2xl text-slate-900 rounded-2xl">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                            {alertMessage}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- NAVIGATION INTERFACE --- */}
+                <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
+                    <div className="flex items-center justify-between h-20 px-8 mx-auto max-w-[1600px]">
+                        <Link href="/" className="flex items-center gap-3 group">
+                            <div className="flex items-center justify-center w-10 h-10 transition-transform bg-teal-500 shadow-lg rounded-xl group-hover:rotate-6 shadow-teal-500/20">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                             </div>
+                            <span className="text-xl font-bold tracking-tighter text-white uppercase">MediFlow <span className="text-teal-500 text-[10px] font-black tracking-[0.3em] ml-1">Clinical</span></span>
+                        </Link>
 
-                            <div className="flex items-center gap-4">
-                                <div className="hidden sm:flex items-center gap-2 bg-slate-800/50 py-1 px-3 rounded-full border border-white/10">
-                                    <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
-                                    <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Dr. {auth.user.name}</span>
-                                </div>
-                                <form onSubmit={handleLogout}>
-                                    <button className="px-5 py-2 bg-red-500/10 border border-red-500/50 text-red-400 rounded-full text-sm font-bold hover:bg-red-500 hover:text-white transition">Log Out</button>
-                                </form>
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-2 px-4 py-2 transition border rounded-xl bg-white/[0.03] border-white/10 hover:bg-white/5">
+                                <div className="w-1.5 h-1.5 bg-teal-500 rounded-full"></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sync Profile</span>
+                            </button>
+                            <div className="flex-col items-end hidden px-4 leading-none lg:flex">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Practitioner</span>
+                                <span className="mt-1 text-xs font-bold text-white uppercase">Dr. {auth.user.name}</span>
                             </div>
+                            <button onClick={handleLogout} className="p-2.5 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                            </button>
                         </div>
                     </div>
                 </nav>
 
-                <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                    
-                    {/* 1. STATS CARDS */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                        <div className="p-6 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl shadow-lg">
-                            <h3 className="text-slate-400 text-xs uppercase font-bold tracking-wider">Pending Requests</h3>
-                            <p className="text-4xl font-extrabold text-yellow-400 mt-2">{appointments.filter(a => a.status === 'pending').length}</p>
-                        </div>
-                        <div className="p-6 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl shadow-lg">
-                            <h3 className="text-slate-400 text-xs uppercase font-bold tracking-wider">Upcoming Confirmed</h3>
-                            <p className="text-4xl font-extrabold text-white mt-2">{upcomingAppointments.filter(a => a.status === 'confirmed').length}</p>
-                        </div>
-                        <div className="p-6 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl shadow-lg">
-                            <h3 className="text-slate-400 text-xs uppercase font-bold tracking-wider">Total Patients Seen</h3>
-                            <p className="text-4xl font-extrabold text-teal-400 mt-2">{appointments.filter(a => a.status === 'completed').length}</p>
-                        </div>
+                <main className="px-8 pt-32 pb-20 mx-auto max-w-[1600px]">
+
+                    {/* --- SYSTEM METRICS --- */}
+                    <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-3">
+                        {[
+                            { label: 'Pending Requests', val: appointments?.filter(a => a.status === 'pending').length, color: 'text-yellow-400', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+                            { label: 'Upcoming Consultations', val: upcomingAppointments.length, color: 'text-white', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                            { label: 'Clinical History', val: appointments?.filter(a => a.status === 'completed').length, color: 'text-teal-400', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' }
+                        ].map((stat, i) => (
+                            <div key={i} className="p-8 border bg-white/[0.02] backdrop-blur-md rounded-[2rem] border-white/5 shadow-xl">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{stat.label}</h3>
+                                        <p className={`mt-2 text-5xl font-black tracking-tighter ${stat.color}`}>{stat.val || 0}</p>
+                                    </div>
+                                    <div className="flex items-center justify-center w-12 h-12 border rounded-2xl bg-white/5 border-white/5">
+                                        <svg className="w-6 h-6 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon}/></svg>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
-                    {/* 2. ACTIONS BAR & TABS */}
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                        
-                        {/* Tabs */}
-                        <div className="flex space-x-1 bg-white/5 p-1 rounded-xl border border-white/10">
-                            <button onClick={() => setActiveTab('upcoming')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'upcoming' ? 'bg-teal-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}>Appointments</button>
-                            <button onClick={() => setActiveTab('history')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-teal-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}>History</button>
-                            {/* ✅ ADDED: My Schedules Tab Button */}
-                            <button onClick={() => setActiveTab('schedules')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'schedules' ? 'bg-teal-500 text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}>My Schedules</button>
+                    {/* --- MODULE CONTROLS --- */}
+                    <div className="flex flex-col items-center justify-between gap-4 mb-8 md:flex-row">
+                        <div className="flex p-1 space-x-1 border bg-black/20 rounded-[1.25rem] border-white/5">
+                            {['upcoming', 'history', 'schedules'].map((t) => (
+                                <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-teal-500 text-slate-900 shadow-lg' : 'text-slate-500 hover:text-white'}`}>{t}</button>
+                            ))}
                         </div>
 
-                        <button onClick={() => setIsWorkFormOpen(!isWorkFormOpen)} className="bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-2">
-                            <span>🕒</span> {isWorkFormOpen ? 'Close Schedule Form' : 'Set Availability'}
+                        <button onClick={() => setIsWorkFormOpen(!isWorkFormOpen)} className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest text-white transition-all border bg-white/5 border-white/10 hover:bg-white/10 rounded-2xl">
+                            <svg className="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            {isWorkFormOpen ? 'Close Logistics' : 'Configure Availability'}
                         </button>
                     </div>
 
-                    {/* 3. SCHEDULE FORM */}
+                    {/* --- SCHEDULING INTERFACE --- */}
                     {isWorkFormOpen && (
-                        <div className="mb-10 p-8 bg-slate-800 rounded-3xl border border-white/10 animate-in slide-in-from-top-4">
-                            <h3 className="text-lg font-bold text-white mb-6">Add New Availability Slot</h3>
-                            <form onSubmit={submitSchedule} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                
-                                {/* ✅ FIXED: Shows ONLY Name (No Address) */}
+                        <div className="p-10 mb-10 border bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] border-white/5 animate-in slide-in-from-top-4">
+                            <h3 className="mb-8 text-xl italic font-black text-white">Register Availability Slot</h3>
+                            <form onSubmit={submitSchedule} className="grid items-end grid-cols-1 gap-8 md:grid-cols-4">
                                 <div>
-                                    <label className="block text-xs text-slate-400 mb-1">Select Hospital</label>
-                                    <select 
-                                        className="w-full bg-slate-900 border-white/10 rounded-lg text-white p-3"
-                                        value={scheduleData.hospital_id}
-                                        onChange={(e) => setScheduleData({...scheduleData, hospital_id: e.target.value})}
-                                    >
-                                        {hospitals.map(h => (
-                                            <option key={h.id} value={h.id}>{h.name}</option> 
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">Day of Week</label>
-                                    <select className="w-full bg-slate-900 border-white/10 rounded-lg text-white p-3" value={scheduleData.day} onChange={(e) => setScheduleData({...scheduleData, day: e.target.value})}>
-                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
+                                    <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Facility Hub</label>
+                                    <select className="w-full px-6 text-white transition-all border outline-none appearance-none cursor-pointer h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={scheduleData.hospital_id} onChange={(e) => setScheduleData({...scheduleData, hospital_id: e.target.value})}>
+                                        {hospitals?.map(h => <option key={h.id} value={h.id} className="bg-slate-900">{h.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-slate-400 mb-1">Time Slot</label>
-                                    <div className="flex gap-2">
-                                        <input type="time" className="bg-slate-900 border-white/10 rounded-lg text-white p-3 w-full" onChange={(e) => setScheduleData({...scheduleData, start_time: e.target.value})} required />
-                                        <span className="self-center text-slate-500">to</span>
-                                        <input type="time" className="bg-slate-900 border-white/10 rounded-lg text-white p-3 w-full" onChange={(e) => setScheduleData({...scheduleData, end_time: e.target.value})} required />
+                                    <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Operational Day</label>
+                                    <select className="w-full px-6 text-white transition-all border outline-none appearance-none cursor-pointer h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={scheduleData.day} onChange={(e) => setScheduleData({...scheduleData, day: e.target.value})}>
+                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                                    </select>
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Time window (Start - End)</label>
+                                    <div className="flex gap-4">
+                                        <input type="time" className="w-full px-4 text-white transition-all border outline-none h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" onChange={(e) => setScheduleData({...scheduleData, start_time: e.target.value})} required />
+                                        <input type="time" className="w-full px-4 text-white transition-all border outline-none h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" onChange={(e) => setScheduleData({...scheduleData, end_time: e.target.value})} required />
                                     </div>
                                 </div>
-                                <button className="bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-3.5 rounded-lg transition shadow-lg">+ Add Slot</button>
+                                <button className="h-14 bg-teal-500 hover:bg-teal-400 text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all active:scale-95">Authorize Slot</button>
                             </form>
                         </div>
                     )}
 
-                    {/* 4. CONTENT AREA */}
-                    
-                    {/* A. UPCOMING APPOINTMENTS */}
-                    {activeTab === 'upcoming' && (
-                        <div className="space-y-4 animate-in fade-in">
-                            {upcomingAppointments.length === 0 ? (
-                                <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/5 border-dashed"><p className="text-slate-500">No upcoming appointments found.</p></div>
-                            ) : (
-                                upcomingAppointments.map(app => (
-                                    <div key={app.id} className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-white/10 transition">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg">{new Date(app.date).getDate()}</div>
-                                            <div>
-                                                <h3 className="text-lg font-bold text-white">{app.user.name}</h3>
-                                                <p className="text-slate-400 text-sm">{new Date(app.date).toLocaleDateString('default', { month: 'long', year: 'numeric' })} • {app.schedule.start_time}</p>
-                                                <p className="text-xs text-slate-500 mt-1">{app.schedule.hospital.name}</p>
+                    {/* --- DATA VIEWS --- */}
+                    <div className="relative p-1 border bg-white/[0.02] border-white/5 rounded-[2.5rem]">
+                        {activeTab === 'upcoming' && (
+                            <div className="p-8 space-y-4 animate-in fade-in">
+                                {upcomingAppointments.length === 0 ? (
+                                    <div className="py-20 text-center border border-dashed rounded-[2rem] border-white/5">
+                                        <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-600 italic">No Active Consultations Found</p>
+                                    </div>
+                                ) : (
+                                    upcomingAppointments.map(app => (
+                                        <div key={app.id} className="flex flex-col items-center justify-between gap-6 p-8 transition-all border bg-white/[0.02] border-white/5 rounded-3xl md:flex-row hover:bg-white/[0.04]">
+                                            <div className="flex items-center gap-6">
+                                                <div className="flex items-center justify-center w-16 h-16 text-2xl italic font-black text-white shadow-2xl bg-gradient-to-br from-teal-500 to-teal-700 rounded-2xl">{new Date(app.date).getDate()}</div>
+                                                <div>
+                                                    <h3 className="text-lg font-black tracking-tight text-white">{app.user.name}</h3>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">
+                                                        {new Date(app.date).toLocaleDateString('default', { month: 'long', year: 'numeric' })} • {app.schedule?.start_time}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-2 text-[11px] font-bold text-teal-500 uppercase tracking-tighter italic">
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                        {app.schedule?.hospital?.name}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                {app.status === 'pending' && (
+                                                    <>
+                                                        <button onClick={() => handleStatus(app.id, 'confirmed')} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-teal-400 transition rounded-xl bg-teal-500/10 hover:bg-teal-500 hover:text-slate-900 border border-teal-500/20">Authorize</button>
+                                                        <button onClick={() => handleStatus(app.id, 'cancelled')} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400 transition rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/20">Discard</button>
+                                                    </>
+                                                )}
+                                                {app.status === 'confirmed' && (
+                                                    <>
+                                                        <span className="px-4 py-1.5 text-[9px] font-black text-blue-400 uppercase tracking-widest rounded-lg bg-blue-500/10 border border-blue-500/20 mr-2 italic">Validated</span>
+                                                        <button onClick={() => handleStatus(app.id, 'completed')} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-teal-500 rounded-xl text-slate-900 hover:scale-105 transition-all shadow-lg shadow-teal-500/20">Finalize Consultation</button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            {app.status === 'pending' && (<><button onClick={() => handleStatus(app.id, 'confirmed')} className="bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white px-4 py-2 rounded-lg font-bold text-sm transition">Accept</button><button onClick={() => handleStatus(app.id, 'cancelled')} className="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg font-bold text-sm transition">Decline</button></>)}
-                                            {app.status === 'confirmed' && (<><span className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold uppercase mr-2">Confirmed</span><button onClick={() => handleStatus(app.id, 'completed')} className="bg-teal-500 hover:bg-teal-400 text-slate-900 px-4 py-2 rounded-lg font-bold text-sm transition">✓ Mark Completed</button></>)}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </div>
+                        )}
 
-                    {/* B. HISTORY */}
-                    {activeTab === 'history' && (
-                        <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/10 shadow-xl animate-in fade-in">
-                            <table className="w-full text-left">
-                                <thead className="bg-white/5 text-slate-400 uppercase text-xs tracking-wider"><tr><th className="p-5 font-semibold">Date</th><th className="p-5 font-semibold">Patient</th><th className="p-5 font-semibold">Status</th><th className="p-5 font-semibold">Hospital</th></tr></thead>
-                                <tbody className="divide-y divide-white/5 text-sm text-slate-300">
-                                    {appointmentHistory.map(app => (
-                                        <tr key={app.id} className="hover:bg-white/5 transition">
-                                            <td className="p-5 font-mono text-white">{new Date(app.date).toLocaleDateString()}</td>
-                                            <td className="p-5 font-bold text-white">{app.user.name}</td>
-                                            <td className="p-5"><span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${app.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' : app.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>{app.status}</span></td>
-                                            <td className="p-5 text-slate-500">{app.schedule.hospital.name}</td>
-                                        </tr>
-                                    ))}
-                                    {appointmentHistory.length === 0 && <tr><td colSpan="4" className="p-10 text-center text-slate-500">No history found.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* C. ✅ ADDED: MY SCHEDULES CONTENT */}
-                    {activeTab === 'schedules' && (
-                        <div className="space-y-6 animate-in fade-in">
-                            <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/10 shadow-xl">
+                        {activeTab === 'history' && (
+                            <div className="overflow-hidden bg-black/20 rounded-[2rem] border border-white/5 animate-in fade-in">
                                 <table className="w-full text-left">
-                                    <thead className="bg-white/5 text-slate-400 uppercase text-xs tracking-wider">
-                                        <tr>
-                                            <th className="p-5 font-semibold">Day</th>
-                                            <th className="p-5 font-semibold">Time Slot</th>
-                                            <th className="p-5 font-semibold">Hospital</th>
-                                            <th className="p-5 font-semibold">Status</th>
-                                        </tr>
+                                    <thead className="bg-white/[0.03] text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-white/5">
+                                        <tr><th className="p-6">Execution Date</th><th className="p-6">Patient Entity</th><th className="p-6">Final State</th><th className="p-6">Hub</th></tr>
                                     </thead>
-                                    <tbody className="divide-y divide-white/5 text-sm text-slate-300">
-                                        {/* Uses 'mySchedules' passed from the backend */}
-                                        {mySchedules && mySchedules.length > 0 ? (
-                                            mySchedules.map(sch => (
-                                                <tr key={sch.id} className="hover:bg-white/5 transition">
-                                                    <td className="p-5 font-bold text-white">{sch.day}</td>
-                                                    <td className="p-5 font-mono text-teal-400">{sch.start_time} - {sch.end_time}</td>
-                                                    <td className="p-5 text-white">{sch.hospital.name}</td>
-                                                    <td className="p-5"><span className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs border border-green-500/20">Active</span></td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr><td colSpan="4" className="p-10 text-center text-slate-500">No availability slots added yet.</td></tr>
-                                        )}
+                                    <tbody className="text-sm divide-y divide-white/5 text-slate-300">
+                                        {appointmentHistory.map(app => (
+                                            <tr key={app.id} className="transition-colors hover:bg-white/[0.02]">
+                                                <td className="p-6 font-mono text-[11px] uppercase tracking-tighter text-slate-500">{new Date(app.date).toLocaleDateString()}</td>
+                                                <td className="p-6 italic font-black text-white">{app.user.name}</td>
+                                                <td className="p-6">
+                                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${app.status === 'completed' ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{app.status}</span>
+                                                </td>
+                                                <td className="p-6 text-[11px] font-bold text-slate-600 uppercase">{app.schedule?.hospital?.name}</td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                </div>
+                        {activeTab === 'schedules' && (
+                            <div className="overflow-hidden bg-black/20 rounded-[2rem] border border-white/5 animate-in fade-in">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/[0.03] text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-white/5">
+                                        <tr><th className="p-6">Cyclical Day</th><th className="p-6">Operational Window</th><th className="p-6">Hub</th><th className="p-6 text-right">Actions</th></tr>
+                                    </thead>
+                                    <tbody className="text-sm divide-y divide-white/5 text-slate-300">
+                                        {mySchedules?.map(sch => (
+                                            <tr key={sch.id} className="transition-colors hover:bg-white/[0.02] group">
+                                                <td className="p-6 italic font-black text-white">{sch.day}</td>
+                                                <td className="p-6 font-mono text-[11px] text-teal-400 uppercase tracking-widest">{sch.start_time} — {sch.end_time}</td>
+                                                <td className="p-6 text-[11px] font-bold text-slate-500 uppercase">{sch.hospital?.name}</td>
+                                                <td className="p-6 text-right">
+                                                    {/* ✅ FIX: Button visibility set to 100% */}
+                                                    <button onClick={() => deleteSchedule(sch.id)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-red-500 transition border border-red-500/20 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white">Decommission Slot</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </main>
+
+                {/* --- UNIVERSAL MODAL INTERFACES --- */}
+                {isProfileModalOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
+                        <div className="w-full max-w-lg p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl">
+                            <h3 className="mb-8 text-2xl italic font-black text-white">Synchronize Profile</h3>
+                            <form onSubmit={submitProfile} className="space-y-8">
+                                <div>
+                                    <label className="block mb-3 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Validated Specialization</label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-6 text-white transition-all border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                        value={profileForm.data.specialization}
+                                        onChange={e => profileForm.setData('specialization', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block mb-3 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Clinical Biography</label>
+                                    <textarea
+                                        className="w-full h-32 p-6 text-sm text-white transition-all border outline-none resize-none bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                        value={profileForm.data.bio}
+                                        onChange={e => profileForm.setData('bio', e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Identify Asset (Portrait)</label>
+                                    {/* ✅ FIX: Styled file input to match user image request */}
+                                    <div className="relative h-16 group">
+                                        <input
+                                            type="file"
+                                            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"
+                                            onChange={e => profileForm.setData('image', e.target.files[0])}
+                                        />
+                                        <div className="flex items-center justify-between h-full px-6 transition-all border bg-black/40 border-white/10 rounded-2xl group-hover:border-teal-500/50">
+                                            <span className="text-[10px] font-black uppercase bg-teal-500/20 text-teal-400 px-4 py-1.5 rounded-xl border border-teal-500/20">Choose File</span>
+                                            <span className="text-[10px] font-bold text-slate-500 truncate max-w-[200px]">
+                                                {profileForm.data.image ? profileForm.data.image.name : 'No file detected'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-4">
+                                    <button
+                                        type="submit"
+                                        disabled={profileForm.processing}
+                                        className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-teal-500 text-slate-900 rounded-[1.25rem] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 active:scale-95 transition-all disabled:opacity-50"
+                                    >
+                                        {profileForm.processing ? 'Syncing...' : 'COMMIT CHANGES'}
+                                    </button>
+                                    <button type="button" onClick={() => setIsProfileModalOpen(false)} className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all">ABORT</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

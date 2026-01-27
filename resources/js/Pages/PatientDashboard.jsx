@@ -1,34 +1,62 @@
-import { Link, Head, router } from '@inertiajs/react';
+import { Link, Head, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
-export default function PatientDashboard({ auth, doctors, filters, specialties }) {
+/**
+ * Patient Dashboard Component
+ * Centralized portal for health consumers.
+ * Orchestrates doctor discovery, dynamic scheduling, and clinical history oversight.
+ */
+export default function PatientDashboard({ auth, doctors, filters, specialties, myAppointments }) {
 
-    // --- STATE ---
+    const { flash } = usePage().props;
+    const [alertMessage, setAlertMessage] = useState(null);
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
-    const [filteredDoctors, setFilteredDoctors] = useState([]); 
+    const [filteredDoctors, setFilteredDoctors] = useState([]);
+    const [notifications, setNotifications] = useState([]);
+    const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
-    // ✅ AUTO-SELECT DOCTOR ON LOAD
+    const todayISO = new Date().toISOString().split('T')[0];
+
     useEffect(() => {
-        // If a specific doctor ID was passed (from "View Specialists" page)
+        if (flash?.message) {
+            setAlertMessage(flash.message);
+            const timer = setTimeout(() => setAlertMessage(null), 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [flash]);
+
+    const activeAppointments = myAppointments?.filter(app =>
+        app.status === 'pending' || app.status === 'confirmed'
+    ) || [];
+
+    const pastAppointments = myAppointments?.filter(app =>
+        app.status === 'completed' || app.status === 'cancelled'
+    ) || [];
+
+    useEffect(() => {
+        const alerts = myAppointments?.filter(app => app.status !== 'pending').map(app => ({
+            id: app.id,
+            msg: `Your appointment with Dr. ${app.doctor?.user?.name} is now ${app.status}.`,
+            status: app.status
+        })) || [];
+        setNotifications(alerts);
+    }, [myAppointments]);
+
+    useEffect(() => {
         if (filters?.doctor_id) {
             const targetDoctor = doctors.find(d => d.id == filters.doctor_id);
             if (targetDoctor) {
-                // 1. Auto-select their category
                 setSelectedCategory(targetDoctor.specialization);
-                // 2. Auto-fill search with their name to isolate them
                 setSearchTerm(targetDoctor.user.name);
             }
         }
-    }, []); // Runs once when page loads
+    }, []);
 
-    // ... (Keep the rest of your Calendar Helpers, Availability Checker, etc. EXACTLY the same) ...
-    // ... Copy everything from previous step starting from 'const getDaysInMonth = ...' down to the end ...
-    
-    // FOR CLARITY, I will paste the rest below so you have the full file:
-    
+    const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
     const getDaysInMonth = (year, month) => {
         const date = new Date(year, month, 1);
         const days = [];
@@ -40,7 +68,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties }
     };
 
     const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
-    const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const padDays = Array(firstDayOfMonth).fill(null);
 
@@ -53,13 +80,11 @@ export default function PatientDashboard({ auth, doctors, filters, specialties }
 
     useEffect(() => {
         let results = doctors;
-        if (selectedCategory) {
-            results = results.filter(doc => doc.specialization === selectedCategory);
-        }
+        if (selectedCategory) results = results.filter(doc => doc.specialization === selectedCategory);
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
-            results = results.filter(doc => 
-                doc.user.name.toLowerCase().includes(lowerTerm) || 
+            results = results.filter(doc =>
+                doc.user.name.toLowerCase().includes(lowerTerm) ||
                 doc.specialization.toLowerCase().includes(lowerTerm)
             );
         }
@@ -71,175 +96,272 @@ export default function PatientDashboard({ auth, doctors, filters, specialties }
     }, [selectedCategory, searchTerm, selectedDate, doctors]);
 
     const handleTyping = (e) => { setSearchTerm(e.target.value); if(selectedDate) setSelectedDate(null); };
+
     const changeMonth = (offset) => {
         const newDate = new Date(currentDate.setMonth(currentDate.getMonth() + offset));
         setCurrentDate(new Date(newDate));
         setSelectedDate(null);
     };
+
     const handleBook = (scheduleId) => {
-        const defaultDate = selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-        const date = prompt("Confirm appointment date (YYYY-MM-DD):", defaultDate);
+        const defaultDate = selectedDate ? selectedDate.toISOString().split('T')[0] : todayISO;
+        const date = prompt("Verify and authorize appointment date (YYYY-MM-DD):", defaultDate);
         if (date) {
-            router.post(route('appointments.store'), { schedule_id: scheduleId, date: date }, {
-                onSuccess: () => alert('Appointment Booked Successfully!'),
-                onError: (errors) => alert('Error: ' + (errors.date || 'Could not book.'))
-            });
+            router.post(route('appointments.store'), { schedule_id: scheduleId, date: date });
         }
     };
+
+    const handleCancel = (id) => {
+        if (confirm("Permanently abort this consultation request?")) {
+            router.patch(route('appointments.status', id), { status: 'cancelled' });
+        }
+    };
+
     const handleLogout = (e) => { e.preventDefault(); router.post(route('logout')); };
 
     return (
         <>
-            <Head title="Find a Doctor" />
-            <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-teal-500 selection:text-white">
-                <nav className="fixed w-full z-50 bg-slate-900/80 backdrop-blur-md border-b border-white/10">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="flex justify-between h-20 items-center">
-                            <Link href="/" className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center transform rotate-3">
-                                    <span className="text-white font-bold text-xl">+</span>
+            <Head title="Health Portal | Patient Dashboard" />
+            <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-teal-500/30">
+
+                {alertMessage && (
+                    <div className="fixed z-[100] top-24 left-1/2 -translate-x-1/2 animate-in slide-in-from-top-4">
+                        <div className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest bg-teal-500 border border-teal-400 shadow-2xl text-slate-900 rounded-2xl">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                            {alertMessage}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- NAVIGATION INTERFACE --- */}
+                <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
+                    <div className="px-6 mx-auto max-w-7xl lg:px-8">
+                        <div className="flex items-center justify-between h-20">
+                            <Link href="/" className="flex items-center gap-3 group">
+                                <div className="flex items-center justify-center w-10 h-10 transition-transform bg-teal-500 shadow-lg rounded-xl group-hover:rotate-6 shadow-teal-500/20">
+                                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                                 </div>
-                                <span className="text-2xl font-bold tracking-tight text-white">Medi<span className="text-teal-400">Flow</span></span>
+                                <span className="text-xl font-bold tracking-tighter text-white uppercase">MediFlow <span className="text-teal-500 text-[10px] font-black tracking-widest ml-1">Node</span></span>
                             </Link>
-                            <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-300">
-                                <Link href="/" className="hover:text-teal-400 transition">Home</Link>
-                                <a href="/#services" className="hover:text-teal-400 transition">Services</a>
-                                <Link href={route('contact')} className="hover:text-teal-400 transition">Contact</Link>
+
+                            {/* ✅ ADDED NAVIGATION TABS */}
+                            <div className="hidden p-1 space-x-1 border md:flex bg-black/20 rounded-2xl border-white/5">
+                                <Link href="/" className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Home</Link>
+                                <Link href={route('specialists')} className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Doctors</Link>
+                                <a href="/#services" className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Services</a>
+                                <Link href={route('contact')} className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Contact</Link>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-3 bg-slate-800/50 py-1.5 px-3 rounded-full border border-white/10">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                        {auth.user.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="text-left hidden sm:block pr-2">
-                                        <p className="text-[10px] uppercase tracking-wider text-slate-400 leading-none mb-0.5">Patient</p>
-                                        <p className="text-sm font-bold text-white leading-none">{auth.user.name}</p>
-                                    </div>
-                                </div>
-                                <form onSubmit={handleLogout}>
-                                    <button className="p-2 bg-slate-800 border border-white/10 text-slate-300 rounded-full hover:bg-red-500/10 hover:text-red-400 transition">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+
+                            <div className="flex items-center gap-6">
+                                <div className="relative">
+                                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 transition border rounded-xl bg-white/[0.03] border-white/10 hover:bg-white/5 text-slate-400">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                        {notifications.length > 0 && <span className="absolute top-0 right-0 flex items-center justify-center w-4 h-4 text-[8px] font-black bg-teal-500 text-slate-900 rounded-full">{notifications.length}</span>}
                                     </button>
-                                </form>
+                                    {showNotifDropdown && (
+                                        <div className="absolute right-0 mt-4 overflow-hidden border shadow-2xl w-72 bg-slate-900 border-white/10 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                            <div className="p-4 text-[10px] font-black uppercase tracking-widest border-b bg-white/[0.02] border-white/5 text-slate-500 italic">System Alerts</div>
+                                            <div className="overflow-y-auto max-h-64">
+                                                {notifications.length > 0 ? notifications.map(n => (
+                                                    <div key={n.id} className="p-4 text-[11px] font-medium border-b border-white/5 hover:bg-white/[0.02] transition leading-relaxed">{n.msg}</div>
+                                                )) : <div className="p-10 text-center text-slate-600 text-[10px] font-bold uppercase tracking-widest italic">Buffer Empty</div>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-4 px-4 py-2 border bg-slate-800/40 rounded-xl border-white/5">
+                                    <div className="flex items-center justify-center w-8 h-8 text-xs font-black bg-teal-500 rounded-lg text-slate-900">{auth.user.name.charAt(0).toUpperCase()}</div>
+                                    <p className="hidden text-xs italic font-bold tracking-widest text-white uppercase sm:block">{auth.user.name}</p>
+                                </div>
+                                <button onClick={handleLogout} className="p-2.5 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </nav>
 
-                <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        <div className="lg:col-span-1 space-y-8">
-                            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
-                                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><span>🩺</span> Specialties</h3>
-                                <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {specialties && specialties.length > 0 ? (
-                                        specialties.map((cat, idx) => (
-                                            <button key={idx} onClick={() => { setSelectedCategory(cat === selectedCategory ? null : cat); setSelectedDate(null); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition flex justify-between items-center ${selectedCategory === cat ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}>
-                                                {cat}
-                                                {selectedCategory === cat && <span>✓</span>}
+                <main className="px-6 pt-40 pb-20 mx-auto max-w-7xl lg:px-8">
+
+                    {/* --- SYSTEM SEARCH --- */}
+                    <div className="flex justify-center mb-16">
+                        <div className="relative w-full max-w-3xl">
+                            <input type="text" placeholder={selectedCategory ? `Filter ${selectedCategory} Specialists...` : "Identify Practitioner or Clinical Field..."} className="w-full h-16 px-16 text-sm font-medium text-white transition-all border outline-none bg-white/[0.02] border-white/10 rounded-[2rem] focus:ring-2 focus:ring-teal-500 backdrop-blur-xl" value={searchTerm} onChange={handleTyping} />
+                            <div className="absolute -translate-y-1/2 left-6 top-1/2 text-slate-500">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* --- ACTIVE ENGAGEMENTS --- */}
+                    <div className="mb-20">
+                        <div className="flex items-center gap-3 mb-10">
+                            <h2 className="text-3xl italic font-black tracking-tight text-white uppercase">Active Consultations</h2>
+                            <span className="h-[2px] flex-1 bg-white/5"></span>
+                        </div>
+
+                        {activeAppointments.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                                {activeAppointments.map(app => {
+                                    const isToday = app.date === todayISO;
+                                    return (
+                                        <div key={app.id} className={`relative p-8 border bg-white/[0.02] backdrop-blur-md rounded-[2.5rem] transition-all duration-500 border-white/5 ${isToday ? 'ring-2 ring-teal-500/50 shadow-2xl' : ''}`}>
+                                            {isToday && <span className="absolute -top-4 right-8 px-4 py-1.5 bg-teal-500 text-slate-900 text-[9px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg italic animate-pulse">Critical Today</span>}
+                                            <div className="flex items-start justify-between mb-8">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Practitioner Identity</p>
+                                                    <p className="text-xl italic font-black tracking-tight text-white uppercase">Dr. {app.doctor?.user?.name}</p>
+                                                </div>
+                                                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${app.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>{app.status}</span>
+                                            </div>
+                                            <div className="mb-10 space-y-4">
+                                                <a href={`http://maps.google.com/?q=${encodeURIComponent(app.schedule?.hospital?.name)}`} target="_blank" className="flex items-center gap-3 transition-all group">
+                                                    <div className="flex items-center justify-center w-8 h-8 transition-colors rounded-lg bg-teal-500/10 group-hover:bg-teal-500">
+                                                        <svg className="w-4 h-4 text-teal-500 group-hover:text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                    </div>
+                                                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-white border-b border-transparent group-hover:border-teal-500">{app.schedule?.hospital?.name}</span>
+                                                </a>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5">
+                                                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                    </div>
+                                                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">{app.date} • {app.schedule?.start_time}</span>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => handleCancel(app.id)} className="w-full py-4 text-[9px] font-black uppercase tracking-[0.2em] text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-red-500/5 rounded-2xl group flex items-center justify-center gap-2">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                                                Terminate Request
                                             </button>
-                                        ))
-                                    ) : ( <p className="text-xs text-slate-500 italic">No specialties found.</p> )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="p-20 text-center border-2 border-dashed border-white/5 bg-white/[0.01] rounded-[3rem]">
+                                <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-600 italic">No Active Consultation Sequences</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- SCHEDULING INTERFACE --- */}
+                    <div className="grid grid-cols-1 gap-12 lg:grid-cols-4">
+                        <div className="space-y-10 lg:col-span-1">
+                            <div className="p-8 border bg-white/[0.02] border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-md">
+                                <h3 className="text-sm font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-3">
+                                    <svg className="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    Specialties
+                                </h3>
+                                <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {specialties?.map((cat, idx) => (
+                                        <button key={idx} onClick={() => { setSelectedCategory(cat === selectedCategory ? null : cat); setSelectedDate(null); }} className={`w-full text-left px-6 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedCategory === cat ? 'bg-teal-500 text-slate-900 shadow-xl' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{cat}</button>
+                                    ))}
                                 </div>
                             </div>
 
-                            <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl transition-opacity ${!selectedCategory && !searchTerm ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-lg font-bold text-white">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition">◀</button>
-                                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition">▶</button>
+                            <div className={`p-8 border bg-white/[0.02] border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-md transition-all ${!selectedCategory && !searchTerm ? 'opacity-20 grayscale pointer-events-none' : 'opacity-100'}`}>
+                                <div className="flex items-center justify-between mb-8">
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-white italic">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => changeMonth(-1)} className="text-slate-500 hover:text-teal-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path d="M15 19l-7-7 7-7"/></svg></button>
+                                        <button onClick={() => changeMonth(1)} className="text-slate-500 hover:text-teal-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path d="M9 5l7 7-7 7"/></svg></button>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-7 text-center mb-2">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <span key={d} className="text-xs font-bold text-slate-500 uppercase">{d}</span>)}</div>
                                 <div className="grid grid-cols-7 gap-2">
-                                    {padDays.map((_, i) => <div key={`pad-${i}`} />)}
+                                    {padDays.map((_, i) => <div key={i} />)}
                                     {daysInMonth.map((dayObj, i) => {
                                         const isAvailable = isDayAvailable(dayObj);
                                         const isSelected = selectedDate && dayObj.toDateString() === selectedDate.toDateString();
-                                        return (
-                                            <button key={i} disabled={!isAvailable} onClick={() => setSelectedDate(isSelected ? null : dayObj)} className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold transition relative mx-auto ${isSelected ? 'bg-teal-500 text-slate-900 shadow-lg scale-110' : ''} ${!isSelected && isAvailable ? 'bg-white/10 text-white hover:bg-white/20' : ''} ${!isSelected && !isAvailable ? 'text-slate-600 cursor-not-allowed' : ''}`}>
-                                                {dayObj.getDate()}
-                                                {!isSelected && isAvailable && <span className="absolute -bottom-1 w-1 h-1 bg-green-500 rounded-full"></span>}
-                                            </button>
-                                        );
+                                        return <button key={i} disabled={!isAvailable} onClick={() => setSelectedDate(isSelected ? null : dayObj)} className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${isSelected ? 'bg-teal-500 text-slate-900' : isAvailable ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500 hover:text-slate-900' : 'text-slate-700'}`}>{dayObj.getDate()}</button>;
                                     })}
                                 </div>
                             </div>
                         </div>
 
+                        {/* --- PRACTITIONER RESULTS --- */}
                         <div className="lg:col-span-3">
-                            <div className="mb-8 animate-in fade-in slide-in-from-top-4">
-                                <div className="relative group max-w-xl">
-                                    <div className="absolute inset-0 bg-teal-500/20 rounded-full blur-xl group-hover:bg-teal-500/30 transition"></div>
-                                    <input 
-                                        type="text" 
-                                        placeholder={selectedCategory ? `Search ${selectedCategory}s by Name...` : "Search all doctors by Name..."} 
-                                        className="relative w-full bg-white/5 border border-white/10 text-white rounded-full py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-teal-500 outline-none transition backdrop-blur-md shadow-2xl placeholder-slate-500"
-                                        value={searchTerm}
-                                        onChange={handleTyping}
-                                    />
-                                    <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    </div>
-                                </div>
-                            </div>
-
                             {!selectedCategory && !searchTerm ? (
-                                <div className="h-full flex flex-col items-center justify-center bg-white/5 border border-white/5 border-dashed rounded-3xl p-12 text-center min-h-[400px]">
-                                    <div className="text-6xl mb-6 opacity-30 animate-pulse">👈</div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">Select a Specialty or Search</h2>
-                                    <p className="text-slate-400 max-w-md">Choose a medical category from the left menu OR type a doctor's name above to get started.</p>
+                                <div className="p-20 text-center border-2 border-dashed border-white/5 bg-white/[0.01] rounded-[3rem] min-h-[500px] flex flex-col justify-center">
+                                    <svg className="w-16 h-16 mx-auto mb-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    <h2 className="mb-2 text-2xl italic font-black tracking-tight text-white">Practitioner Discovery</h2>
+                                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-600">Select a discipline to initialize database search</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                                <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
                                     {filteredDoctors.map(doctor => (
-                                        <div key={doctor.id} className="relative bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-teal-500/30 transition duration-300 group shadow-lg flex flex-col items-center text-center">
-                                            <div className="relative mb-4">
-                                                {doctor.image ? (<img src={`/storage/${doctor.image}`} alt="Doctor" className="h-24 w-24 rounded-full object-cover border-4 border-slate-800 shadow-xl" />) : (<div className="h-24 w-24 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-2xl border-4 border-slate-700">DR</div>)}
-                                                <div className={`absolute bottom-1 right-1 w-5 h-5 border-4 border-slate-900 rounded-full ${doctor.schedules.length > 0 ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                                        <div key={doctor.id} className="p-8 transition-all border bg-white/[0.02] border-white/5 rounded-[2.5rem] hover:bg-white/[0.04] group hover:border-teal-500/20">
+                                            <div className="flex flex-col items-center mb-8 text-center">
+                                                <div className="relative mb-6">
+                                                    {doctor.image ?
+                                                        <img src={`/storage/${doctor.image}`} className="w-24 h-24 rounded-[2rem] object-cover shadow-2xl border-2 border-white/10" alt="Specialist" /> :
+                                                        <div className="w-24 h-24 rounded-[2rem] bg-slate-800 border-2 border-white/5 flex items-center justify-center font-black text-xl text-slate-500 italic uppercase">DR</div>
+                                                    }
+                                                    <div className="absolute flex items-center justify-center w-8 h-8 bg-teal-500 border-4 -bottom-2 -right-2 rounded-xl border-slate-900"><svg className="w-3.5 h-3.5 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4"><path d="M5 13l4 4L19 7"/></svg></div>
+                                                </div>
+                                                <h3 className="text-lg italic font-black tracking-tight text-white uppercase">Dr. {doctor.user?.name}</h3>
+                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-teal-500 mt-1">{doctor.specialization}</p>
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-1">{doctor.user.name}</h3>
-                                            <span className="text-xs font-bold uppercase tracking-wider text-teal-400 mb-4">{doctor.specialization}</span>
-                                            <div className="w-full bg-slate-950/30 rounded-xl p-3 mb-4 text-sm text-slate-300 space-y-2 border border-white/5 min-h-[100px] flex flex-col justify-center">
-                                                {doctor.schedules.length > 0 ? (
-                                                    doctor.schedules
-                                                    .filter(s => !selectedDate || s.day === weekDays[selectedDate.getDay()])
-                                                    .map(schedule => (
-                                                        <div key={schedule.id} className="flex justify-between border-b border-white/5 last:border-0 pb-1 last:pb-0">
-                                                            <span className="text-white font-medium">{schedule.day}</span>
-                                                            <div className="text-right">
-                                                                <span className="text-teal-400 font-bold block">{schedule.start_time} - {schedule.end_time}</span>
-                                                                <span className="text-[10px] text-slate-500 block truncate max-w-[80px]">{schedule.hospital.name}</span>
-                                                            </div>
-                                                            <button onClick={() => handleBook(schedule.id)} className="hidden"></button>
+                                            <div className="p-4 mb-8 space-y-3 border rounded-[1.5rem] bg-black/30 border-white/5">
+                                                {doctor.schedules.length > 0 ? doctor.schedules.filter(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]).map(schedule => (
+                                                    <div key={schedule.id} className="flex items-center justify-between">
+                                                        <div className="leading-tight text-left">
+                                                            <span className="text-[10px] font-black text-white uppercase tracking-tighter block mb-0.5">{schedule.day}</span>
+                                                            <span className="text-[9px] font-bold text-slate-600 uppercase truncate block max-w-[120px]">{schedule.hospital?.name}</span>
                                                         </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-xs text-slate-500 italic">No schedules added yet.</p>
-                                                )}
-                                                {selectedDate && doctor.schedules.length > 0 && !doctor.schedules.some(s => s.day === weekDays[selectedDate.getDay()]) && (
-                                                    <p className="text-xs text-red-400">Not available on {weekDays[selectedDate.getDay()]}</p>
-                                                )}
+                                                        <button onClick={() => handleBook(schedule.id)} className="h-8 px-4 bg-teal-500/10 text-teal-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-teal-500 hover:text-slate-900 transition-all">{schedule.start_time}</button>
+                                                    </div>
+                                                )) : <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700 italic text-center py-2">No Active Slots</p>}
                                             </div>
-                                            {doctor.schedules.length > 0 ? (
-                                                <button onClick={() => { const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]); if (validSchedule) handleBook(validSchedule.id); else alert("This doctor is not available on the selected date."); }} className="w-full py-2.5 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-lg font-bold hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition">Book {selectedDate ? selectedDate.toLocaleDateString() : 'Appointment'}</button>
-                                            ) : (
-                                                <button disabled className="w-full py-2.5 bg-slate-800 text-slate-500 rounded-lg font-bold cursor-not-allowed border border-white/5">Unavailable</button>
-                                            )}
+
+                                            {/* ✅ UPDATED BOOKING BUTTON: Matches Image Style */}
+                                            <button
+                                                onClick={() => { const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]); if (validSchedule) handleBook(validSchedule.id); else alert("Conflict identified."); }}
+                                                className="w-full h-14 bg-teal-500 text-slate-900 rounded-[1.25rem] font-bold text-[10px] uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 transition-all active:scale-95 flex items-center justify-center gap-3"
+                                            >
+                                                INITIATE BOOKING
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+                                            </button>
                                         </div>
                                     ))}
-                                    {filteredDoctors.length === 0 && (
-                                        <div className="col-span-full text-center py-20">
-                                            <p className="text-slate-500 text-lg">No doctors found matching "{searchTerm}".</p>
-                                            <button onClick={() => {setSelectedDate(null); setSearchTerm('')}} className="text-teal-400 underline mt-2">Reset Filters</button>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
-                </div>
+
+                    {/* --- VISIT HISTORY --- */}
+                    <div className="pt-24 mt-24 border-t border-white/5">
+                        <button onClick={() => document.getElementById('history-section').classList.toggle('hidden')} className="flex items-center gap-4 transition-all group">
+                            <div className="flex items-center justify-center w-12 h-12 rounded-[1.25rem] bg-white/5 border border-white/10 group-hover:bg-white/10">
+                                <svg className="w-5 h-5 text-slate-400 group-hover:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <h2 className="text-xl font-black tracking-widest uppercase text-slate-400 group-hover:text-white">Clinical History Repository</h2>
+                            <span className="text-[10px] font-black bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-slate-500 uppercase">{pastAppointments.length} Logs</span>
+                        </button>
+                        <div id="history-section" className="grid hidden grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in slide-in-from-top-4">
+                            {pastAppointments.map(app => (
+                                <div key={app.id} className="p-6 transition-all border bg-white/[0.01] border-white/5 rounded-3xl hover:bg-white/[0.04]">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <p className="text-xs italic font-black text-white uppercase">Dr. {app.doctor?.user?.name}</p>
+                                        <span className={`text-[8px] px-2.5 py-1 rounded-lg font-black uppercase tracking-[0.2em] ${app.status === 'completed' ? 'text-teal-400 bg-teal-400/10' : 'text-red-400 bg-red-400/10'}`}>{app.status}</span>
+                                    </div>
+                                    <p className="text-[10px] font-mono text-slate-600 mb-6 uppercase">{app.date}</p>
+                                    <div className="flex flex-col gap-3">
+                                        <a href={`http://maps.google.com/?q=${encodeURIComponent(app.schedule?.hospital?.name)}`} target="_blank" className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase tracking-tighter hover:text-teal-500 transition-colors">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                                            {app.schedule?.hospital?.name}
+                                        </a>
+                                        {app.status === 'completed' && (
+                                            <a href={route('appointments.receipt', app.id)} target="_blank" className="flex items-center justify-center gap-2 w-full py-3 bg-white/5 hover:bg-teal-500 hover:text-slate-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] transition-all">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                                Archive Receipt
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </main>
             </div>
         </>
     );

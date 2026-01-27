@@ -22,7 +22,7 @@ class Doctor extends Model
         return $this->belongsTo(User::class);
     }
 
-    // 2. ✅ THE FIX: Link to Schedules
+    // 2. THE FIX: Link to Schedules
     // This tells Laravel: "One Doctor has many Schedules"
     public function schedules()
     {

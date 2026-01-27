@@ -25,8 +25,8 @@ export default function Register() {
             <Head title="Register" />
 
             {/* ✅ Full Screen Navy Background */}
-            <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-center items-center p-6 relative overflow-hidden font-sans selection:bg-teal-500 selection:text-white">
-                
+            <div className="relative flex flex-col items-center justify-center min-h-screen p-6 overflow-hidden font-sans text-white bg-slate-900 selection:bg-teal-500 selection:text-white">
+
                 {/* Background Glow Effects */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-teal-500/20 rounded-full blur-[120px] -z-10"></div>
                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] -z-10"></div>
@@ -34,8 +34,8 @@ export default function Register() {
                 {/* --- LOGO SECTION --- */}
                 <div className="mb-8 text-center">
                     <Link href="/" className="flex items-center justify-center gap-2 mb-2">
-                        <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center transform rotate-3 shadow-lg">
-                            <span className="text-white font-bold text-2xl">+</span>
+                        <div className="flex items-center justify-center w-10 h-10 transform bg-teal-500 shadow-lg rounded-xl rotate-3">
+                            <span className="text-2xl font-bold text-white">+</span>
                         </div>
                         <span className="text-3xl font-bold tracking-tight text-white">
                             Medi<span className="text-teal-400">Flow</span>
@@ -45,10 +45,10 @@ export default function Register() {
                 </div>
 
                 {/* --- GLASSMORPHISM CARD --- */}
-                <div className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-                    
+                <div className="w-full max-w-md p-8 border shadow-2xl bg-white/5 backdrop-blur-xl border-white/10 rounded-3xl">
+
                     <form onSubmit={submit} className="space-y-5">
-                        
+
                         {/* Name Input */}
                         <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="name">
@@ -58,14 +58,14 @@ export default function Register() {
                                 id="name"
                                 name="name"
                                 value={data.name}
-                                className="w-full bg-slate-950/50 border border-white/10 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition placeholder-slate-500 shadow-inner"
+                                className="w-full px-4 py-3 text-white transition border shadow-inner outline-none bg-slate-950/50 border-white/10 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-slate-500"
                                 autoComplete="name"
                                 isFocused={true}
                                 onChange={(e) => setData('name', e.target.value)}
                                 required
                                 placeholder="John Doe"
                             />
-                            {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
+                            {errors.name && <p className="mt-1 text-sm text-red-400">{errors.name}</p>}
                         </div>
 
                         {/* Email Input */}
@@ -78,13 +78,13 @@ export default function Register() {
                                 type="email"
                                 name="email"
                                 value={data.email}
-                                className="w-full bg-slate-950/50 border border-white/10 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition placeholder-slate-500 shadow-inner"
+                                className="w-full px-4 py-3 text-white transition border shadow-inner outline-none bg-slate-950/50 border-white/10 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-slate-500"
                                 autoComplete="username"
                                 onChange={(e) => setData('email', e.target.value)}
                                 required
                                 placeholder="name@example.com"
                             />
-                            {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
+                            {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email}</p>}
                         </div>
 
                         {/* Password Input */}
@@ -97,13 +97,13 @@ export default function Register() {
                                 type="password"
                                 name="password"
                                 value={data.password}
-                                className="w-full bg-slate-950/50 border border-white/10 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition placeholder-slate-500 shadow-inner"
+                                className="w-full px-4 py-3 text-white transition border shadow-inner outline-none bg-slate-950/50 border-white/10 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-slate-500"
                                 autoComplete="new-password"
                                 onChange={(e) => setData('password', e.target.value)}
                                 required
                                 placeholder="••••••••"
                             />
-                            {errors.password && <p className="text-red-400 text-sm mt-1">{errors.password}</p>}
+                            {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password}</p>}
                         </div>
 
                         {/* Confirm Password Input */}
@@ -116,13 +116,13 @@ export default function Register() {
                                 type="password"
                                 name="password_confirmation"
                                 value={data.password_confirmation}
-                                className="w-full bg-slate-950/50 border border-white/10 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition placeholder-slate-500 shadow-inner"
+                                className="w-full px-4 py-3 text-white transition border shadow-inner outline-none bg-slate-950/50 border-white/10 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-slate-500"
                                 autoComplete="new-password"
                                 onChange={(e) => setData('password_confirmation', e.target.value)}
                                 required
                                 placeholder="••••••••"
                             />
-                            {errors.password_confirmation && <p className="text-red-400 text-sm mt-1">{errors.password_confirmation}</p>}
+                            {errors.password_confirmation && <p className="mt-1 text-sm text-red-400">{errors.password_confirmation}</p>}
                         </div>
 
                         {/* Register Button */}
@@ -137,11 +137,11 @@ export default function Register() {
                         </div>
 
                         {/* Already Registered Link */}
-                        <div className="text-center text-sm text-slate-400 mt-6">
+                        <div className="mt-6 text-sm text-center text-slate-400">
                             Already have an account?{' '}
-                            <Link 
-                                href={route('login')} 
-                                className="text-teal-400 font-semibold hover:text-teal-300 transition"
+                            <Link
+                                href={route('login')}
+                                className="font-semibold text-teal-400 transition hover:text-teal-300"
                             >
                                 Log in
                             </Link>
