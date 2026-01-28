@@ -14,7 +14,12 @@ class Appointment extends Model
         'doctor_id',
         'schedule_id',
         'date',
-        'status'
+        'status',
+        // ✅ Added new fields for Clinical Finalization
+        'diagnosis',
+        'prescription',
+        'notes',
+        'next_visit_date'
     ];
 
     // ✅ Relationship to the Patient (User)

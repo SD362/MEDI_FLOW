@@ -7,12 +7,14 @@ use Inertia\Inertia;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\AppointmentController;
-use App\Http\Controllers\HospitalController; // Added import
+use App\Http\Controllers\HospitalController;
+use App\Http\Controllers\ContactController;
 use App\Models\User;
 use App\Models\Hospital;
 use App\Models\Schedule;
 use App\Models\Appointment;
 use App\Models\Doctor;
+use App\Models\ContactMessage;
 
 /**
  * Public Access Routes
@@ -23,6 +25,7 @@ Route::get('/', function () {
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
+        'doctorCount' => Doctor::count(),
     ]);
 });
 
@@ -32,6 +35,9 @@ Route::get('/contact', function () {
         'hospitals' => Hospital::orderBy('name', 'asc')->get()
     ]);
 })->name('contact');
+
+// Route to handle Contact Form Submission
+Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
 
 Route::get('/specialists', function () {
     return Inertia::render('Specialists', [
@@ -59,12 +65,17 @@ Route::get('/dashboard', function () {
         return Inertia::render('AdminDashboard', [
             'doctors' => Doctor::with('user')->get(),
             'patients' => User::where('role', 'patient')->get(),
-            'hospitals' => Hospital::all(), // Added to fix "undefined map" error in Admin view
+            'hospitals' => Hospital::all(),
             'appointments' => Appointment::with(['user', 'doctor.user', 'schedule.hospital'])->get(),
+
+            // Fetch Contact Messages for Admin View
+            'messages' => ContactMessage::orderBy('created_at', 'desc')->get(),
+
             'stats' => [
                 'total_doctors' => Doctor::count(),
                 'total_patients' => User::where('role', 'patient')->count(),
                 'total_appointments' => Appointment::count(),
+                'total_messages' => ContactMessage::count(),
             ]
         ]);
 
@@ -135,19 +146,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/schedules', [ScheduleController::class, 'store'])->name('schedules.store');
     Route::delete('/schedules/{id}', [ScheduleController::class, 'destroy'])->name('schedules.destroy');
 
-    // Facility/Hospital Management (Admin Only context)
+    // Facility/Hospital Management
     Route::post('/hospitals', [HospitalController::class, 'store'])->name('hospitals.store');
     Route::patch('/hospitals/{id}', [HospitalController::class, 'update'])->name('hospitals.update');
     Route::delete('/hospitals/{id}', [HospitalController::class, 'destroy'])->name('hospitals.destroy');
 
     // Appointment Operations
     Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
+
     Route::delete('/appointments/{id}', function ($id) {
         Appointment::findOrFail($id)->delete();
         return redirect()->back();
     })->name('appointments.destroy');
-    Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.status');
+
+    Route::patch('/appointments/{id}/status', [AppointmentController::class, 'update'])->name('appointments.status');
+    Route::patch('/appointments/{id}', [AppointmentController::class, 'update'])->name('appointments.update');
+
     Route::get('/appointments/{id}/receipt', [AppointmentController::class, 'showReceipt'])->name('appointments.receipt');
+
+    // ✅ ADDED: Route to DELETE System Inquiries (For Admin)
+    Route::delete('/contact/{id}', [ContactController::class, 'destroy'])->name('contact.destroy');
 });
 
 /**
@@ -157,16 +175,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-});
-
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'doctorCount' => \App\Models\Doctor::count(),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
 });
 
 require __DIR__.'/auth.php';

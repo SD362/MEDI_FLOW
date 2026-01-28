@@ -38,37 +38,54 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Action: Transitions appointment status (Confirm/Cancel/Complete).
-     * Logic: Includes a security check to ensure patients can only cancel their own records.
+     * Action: Handle Status Changes & Clinical Finalization.
+     * Logic: Handles simple status updates (Authorize/Discard) AND full clinical reporting.
      */
-    public function updateStatus(Request $request, $id)
+    public function update(Request $request, $id)
     {
+        $appointment = Appointment::findOrFail($id);
+        $user = auth()->user();
+
+        // --- SECURITY CHECK: Patient Cancellation ---
+        // Patients can only cancel their own appointments
+        if ($user->role === 'patient' && $request->status === 'cancelled') {
+            if ($appointment->user_id !== $user->id) {
+                return back()->with('error', 'Unauthorized action.');
+            }
+        }
+
+        // --- SCENARIO 1: Clinical Finalization (Doctor submits Report) ---
+        // If the request contains a diagnosis, we know it's the "Finalize" form.
+        if ($request->has('diagnosis')) {
+            $validated = $request->validate([
+                'diagnosis' => 'required|string',
+                'prescription' => 'required|string',
+                'notes' => 'nullable|string',
+                'next_visit_date' => 'nullable|date|after:today',
+                'status' => 'required|in:completed'
+            ]);
+
+            $appointment->update($validated);
+
+            return back()->with('message', 'Consultation finalized & Report generated.');
+        }
+
+        // --- SCENARIO 2: Simple Status Update (Authorize/Discard/Confirm) ---
         $request->validate([
             'status' => 'required|in:confirmed,cancelled,completed'
         ]);
-
-        $appointment = Appointment::findOrFail($id);
-
-        /**
-         * Security: Prevent unauthorized status changes.
-         * Ensures patients can only initiate a 'cancelled' status on their own bookings.
-         */
-        if (auth()->user()->role === 'patient' && $request->status === 'cancelled') {
-            if ($appointment->user_id !== auth()->id()) {
-                return redirect()->back()->with('error', 'Unauthorized action.');
-            }
-        }
 
         $appointment->update([
             'status' => $request->status
         ]);
 
-        return redirect()->back()->with('message', 'Appointment status updated successfully!');
+        return back()->with('message', 'Appointment status updated successfully!');
     }
 
     /**
      * Action: Generates a printable clinical record.
      * Logic: Restricts visibility to the owning patient and only for 'completed' visits.
+     * The $appointment object now includes diagnosis/prescription data automatically.
      */
     public function showReceipt($id)
     {

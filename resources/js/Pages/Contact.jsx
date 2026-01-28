@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
 /**
@@ -9,6 +9,16 @@ import { useState } from 'react';
 export default function Contact({ auth, hospitals }) {
 
     const [search, setSearch] = useState('');
+
+    /**
+     * Form State Management (Inertia)
+     * Handles data binding and submission for the inquiry form.
+     */
+    const { data, setData, post, processing, reset } = useForm({
+        full_name: '',
+        email: '',
+        message: ''
+    });
 
     /**
      * State: activeMapQuery
@@ -33,6 +43,20 @@ export default function Contact({ auth, hospitals }) {
     const handleFocusMap = (hospitalName) => {
         const query = encodeURIComponent(hospitalName + " Sri Lanka");
         setActiveMapQuery(query);
+    };
+
+    /**
+     * Action: Submit Inquiry
+     * Sends the form data to the backend via POST request.
+     */
+    const submitInquiry = (e) => {
+        e.preventDefault();
+        post(route('contact.store'), {
+            onSuccess: () => {
+                reset();
+            },
+            preserveScroll: true
+        });
     };
 
     return (
@@ -88,10 +112,11 @@ export default function Contact({ auth, hospitals }) {
                         <div className="space-y-10">
                             {/* DYNAMIC MAP ENGINE */}
                             <div className="bg-white/[0.02] p-2 rounded-[2.5rem] border border-white/5 shadow-2xl h-[450px] relative overflow-hidden group">
+                                {/* ✅ FIXED: Updated to standard Google Maps Embed URL structure */}
                                 <iframe
                                     key={activeMapQuery}
                                     className="w-full h-full rounded-[2rem] relative z-10 grayscale-[0.8] hover:grayscale-0 transition-all duration-1000"
-                                    src={`https://www.google.com/maps?q=${activeMapQuery}&output=embed`}
+                                    src={`https://maps.google.com/maps?q=${activeMapQuery}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
                                     allowFullScreen=""
                                     loading="lazy"
                                     referrerPolicy="no-referrer-when-downgrade"
@@ -163,25 +188,47 @@ export default function Contact({ auth, hospitals }) {
                                     <p className="mt-2 text-xs font-bold leading-relaxed tracking-widest uppercase text-slate-500">Ministry of Health Support Hub</p>
                                 </div>
 
-                                <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); alert("Inquiry Dispatched Successfully."); }}>
+                                <form className="space-y-6" onSubmit={submitInquiry}>
                                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Full Name</label>
-                                            <input type="text" className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" required />
+                                            <input
+                                                type="text"
+                                                className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                                value={data.full_name}
+                                                onChange={e => setData('full_name', e.target.value)}
+                                                required
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Email Address</label>
-                                            <input type="email" className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" required />
+                                            <input
+                                                type="email"
+                                                className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                                value={data.email}
+                                                onChange={e => setData('email', e.target.value)}
+                                                required
+                                            />
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Transmission Message</label>
-                                        <textarea rows="5" placeholder="Specify your requirements..." className="w-full bg-black/30 border border-white/10 text-white rounded-[2rem] p-6 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none" required></textarea>
+                                        <textarea
+                                            rows="5"
+                                            placeholder="Specify your requirements..."
+                                            className="w-full bg-black/30 border border-white/10 text-white rounded-[2rem] p-6 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none"
+                                            value={data.message}
+                                            onChange={e => setData('message', e.target.value)}
+                                            required
+                                        ></textarea>
                                     </div>
 
-                                    <button className="w-full h-16 bg-teal-500 text-slate-900 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-teal-500/10 hover:bg-teal-400 transition-all active:scale-[0.98]">
-                                        Dispatch Inquiry
+                                    <button
+                                        disabled={processing}
+                                        className="w-full h-16 bg-teal-500 text-slate-900 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-teal-500/10 hover:bg-teal-400 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {processing ? 'Dispatching...' : 'Dispatch Inquiry'}
                                     </button>
                                 </form>
                             </div>

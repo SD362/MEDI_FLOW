@@ -4,15 +4,7 @@ import { useState, useEffect } from 'react';
 /**
  * PatientDashboard Component
  * * The central command node for authenticated patients.
- * * Architectural Overview:
- * 1. Data Orchestration: Merges props (doctors, appointments) with local state.
- * 2. Event Handling: Manages booking flows and cancellation requests.
- * 3. Visualization: Renders interactive calendar and appointment timelines.
- * * @param {Object} auth - Authenticated user session payload.
- * @param {Array} doctors - Full dataset of available practitioners and their schedules.
- * @param {Object} filters - Server-side query parameters for pre-loading search states.
- * @param {Array} specialties - List of distinct medical categories for the filter dropdown.
- * @param {Array} myAppointments - Chronological list of user's interaction history.
+ * * Layout Order: Search -> Doctor Booking -> Active Consultations -> History
  */
 export default function PatientDashboard({ auth, doctors, filters, specialties, myAppointments }) {
 
@@ -31,18 +23,13 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
     const [notifications, setNotifications] = useState([]);
 
     // --- Modal Interface State ---
-    // bookingModal: Holds temporary object { scheduleId, date, doctorName, availableDays }
     const [bookingModal, setBookingModal] = useState(null);
-    // cancelModalId: Stores the integer ID of the appointment targeted for termination.
     const [cancelModalId, setCancelModalId] = useState(null);
 
-    // ISO string for HTML5 date input minimum constraints (prevents past-date selection).
     const todayISO = new Date().toISOString().split('T')[0];
 
     /**
      * Feedback Loop: Flash Messages
-     * Listens for backend flash data and triggers the visual toast notification.
-     * Auto-dismisses after 4000ms to prevent UI clutter.
      */
     useEffect(() => {
         if (flash?.message) {
@@ -50,10 +37,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         }
     }, [flash]);
 
-    /**
-     * Utility: Notification Trigger
-     * Centralized function to display transient success/error messages.
-     */
     const triggerNotification = (msg) => {
         setAlertMessage(msg);
         setTimeout(() => setAlertMessage(null), 4000);
@@ -61,8 +44,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Data Logic: Appointment Segmentation
-     * Splits the raw appointment array into 'Active' (Pending/Confirmed) and
-     * 'Historical' (Completed/Cancelled) subsets for UI organization.
      */
     const activeAppointments = myAppointments?.filter(app =>
         app.status === 'pending' || app.status === 'confirmed'
@@ -74,7 +55,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Data Logic: Notification Synthesis
-     * Transforms active appointment status changes into a readable notification stream.
      */
     useEffect(() => {
         const alerts = myAppointments?.filter(app => app.status !== 'pending').map(app => ({
@@ -87,7 +67,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Initialization: Filter Pre-loading
-     * Parses URL query parameters to hydrate search/category states on initial load.
      */
     useEffect(() => {
         if (filters?.doctor_id) {
@@ -118,8 +97,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Helper: Doctor Availability Extractor
-     * Retrieves the list of doctors available on a specific calendar day.
-     * Used for the visual "dot" indicators on the calendar.
      */
     const getDoctorsOnDay = (dateObj) => {
         const dayName = weekDays[dateObj.getDay()];
@@ -128,22 +105,14 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Helper: Day Availability Check
-     * Boolean check to see if *any* currently filtered doctor has a slot on a specific date.
-     * Used to disable/enable calendar interaction.
      */
     const isDayAvailable = (dateObj) => {
         if (!dateObj) return false;
-        // Check availability against the current filtered list
         return getDoctorsOnDay(dateObj).length > 0;
     };
 
     /**
      * Core Engine: Multi-Factor Filtering
-     * The primary logic hook that updates the displayed doctor list.
-     * It intersects three conditions:
-     * 1. Category Selection
-     * 2. Search Term (Name or Specialization)
-     * 3. Selected Calendar Date (Day of week match)
      */
     useEffect(() => {
         let results = doctors;
@@ -178,8 +147,6 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
     /**
      * Interaction: Stage Booking
-     * Opens the confirmation modal with pre-filled data.
-     * Now accepts availableDays to display in the modal UI.
      */
     const handleBook = (scheduleId, doctorName, availableDays) => {
         const defaultDate = selectedDate ? selectedDate.toISOString().split('T')[0] : todayISO;
@@ -187,13 +154,12 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
             scheduleId,
             date: defaultDate,
             doctorName: doctorName,
-            availableDays: availableDays // Stores the specific days this doctor works
+            availableDays: availableDays
         });
     };
 
     /**
      * Interaction: Commit Booking
-     * Submits the staged modal data to the backend via Inertia router.
      */
     const confirmBooking = (e) => {
         e.preventDefault();
@@ -207,18 +173,8 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         }
     };
 
-    /**
-     * Interaction: Stage Cancellation
-     * Sets the target ID for the destruction modal.
-     */
-    const initiateCancel = (id) => {
-        setCancelModalId(id);
-    };
+    const initiateCancel = (id) => { setCancelModalId(id); };
 
-    /**
-     * Interaction: Commit Cancellation
-     * Executes the PATCH request to finalize appointment termination.
-     */
     const confirmCancel = () => {
         if (cancelModalId) {
             router.patch(route('appointments.status', cancelModalId), { status: 'cancelled' }, {
@@ -295,7 +251,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
                 <main className="px-6 pt-40 pb-20 mx-auto max-w-7xl lg:px-8">
 
-                    {/* --- Filter & Search Section --- */}
+                    {/* --- 1. SEARCH BAR --- */}
                     <div className="flex justify-center mb-16">
                         <div className="relative w-full max-w-3xl">
                             <input type="text" placeholder={selectedCategory ? `Filter ${selectedCategory} Specialists...` : "Identify Practitioner or Clinical Field..."} className="w-full h-16 px-16 text-sm font-medium text-white transition-all border outline-none bg-white/[0.02] border-white/10 rounded-[2rem] focus:ring-2 focus:ring-teal-500 backdrop-blur-xl" value={searchTerm} onChange={handleTyping} />
@@ -305,56 +261,8 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         </div>
                     </div>
 
-                    {/* --- Active Appointments Grid --- */}
-                    <div className="mb-20">
-                        <div className="flex items-center gap-3 mb-10">
-                            <h2 className="text-3xl italic font-black tracking-tight text-white uppercase">Active Consultations</h2>
-                            <span className="h-[2px] flex-1 bg-white/5"></span>
-                        </div>
-                        {activeAppointments.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-                                {activeAppointments.map(app => {
-                                    const isToday = app.date === todayISO;
-                                    return (
-                                        <div key={app.id} className={`relative p-8 border bg-white/[0.02] backdrop-blur-md rounded-[2.5rem] transition-all duration-500 border-white/5 ${isToday ? 'ring-2 ring-teal-500/50 shadow-2xl' : ''}`}>
-                                            {isToday && <span className="absolute -top-4 right-8 px-4 py-1.5 bg-teal-500 text-slate-900 text-[9px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg italic animate-pulse">Critical Today</span>}
-                                            <div className="flex items-start justify-between mb-8">
-                                                <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Practitioner Identity</p>
-                                                    <p className="text-xl italic font-black tracking-tight text-white uppercase">Dr. {app.doctor?.user?.name}</p>
-                                                </div>
-                                                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${app.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>{app.status}</span>
-                                            </div>
-                                            <div className="mb-10 space-y-4">
-                                                <a href={`http://maps.google.com/?q=${encodeURIComponent(app.schedule?.hospital?.name)}`} target="_blank" className="flex items-center gap-3 transition-all group">
-                                                    <div className="flex items-center justify-center w-8 h-8 transition-colors rounded-lg bg-teal-500/10 group-hover:bg-teal-500">
-                                                        <svg className="w-4 h-4 text-teal-500 group-hover:text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                    </div>
-                                                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-white border-b border-transparent group-hover:border-teal-500">{app.schedule?.hospital?.name}</span>
-                                                </a>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5">
-                                                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                    </div>
-                                                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">{app.date} • {app.schedule?.start_time}</span>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => initiateCancel(app.id)} className="w-full py-4 text-[9px] font-black uppercase tracking-[0.2em] text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-red-500/5 rounded-2xl group flex items-center justify-center gap-2">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
-                                                Terminate Request
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="p-20 text-center border-2 border-dashed border-white/5 bg-white/[0.01] rounded-[3rem]">
-                                <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-600 italic">No Active Consultation Sequences</p>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-12 lg:grid-cols-4">
+                    {/* --- 2. DOCTOR DISCOVERY & CALENDAR (Moved Up) --- */}
+                    <div className="grid grid-cols-1 gap-12 mb-20 lg:grid-cols-4">
                         <div className="space-y-10 lg:col-span-1">
                             {/* Specialties */}
                             <div className="p-8 border bg-white/[0.02] border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-md">
@@ -436,6 +344,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                                             <span className="text-[9px] font-bold text-slate-600 uppercase truncate block max-w-[120px]">{schedule.hospital?.name}</span>
                                                         </div>
                                                         <button
+                                                            type="button"
                                                             onClick={() => {
                                                                 const availableDays = [...new Set(doctor.schedules.map(s => s.day))].join(', ');
                                                                 handleBook(schedule.id, doctor.user.name, availableDays);
@@ -448,6 +357,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                                 )) : <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700 italic text-center py-2">No Active Slots</p>}
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={() => {
                                                     const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]);
                                                     if (validSchedule) {
@@ -469,15 +379,70 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         </div>
                     </div>
 
+                    {/* --- 3. ACTIVE CONSULTATIONS (Moved Down) --- */}
+                    <div className="pt-10 mb-20 border-t border-white/5">
+                        <div className="flex items-center gap-3 mb-10">
+                            <h2 className="text-3xl italic font-black tracking-tight text-white uppercase">Active Consultations</h2>
+                            <span className="h-[2px] flex-1 bg-white/5"></span>
+                        </div>
+                        {activeAppointments.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                                {activeAppointments.map(app => {
+                                    const isToday = app.date === todayISO;
+                                    return (
+                                        <div key={app.id} className={`relative p-8 border bg-white/[0.02] backdrop-blur-md rounded-[2.5rem] transition-all duration-500 border-white/5 ${isToday ? 'ring-2 ring-teal-500/50 shadow-2xl' : ''}`}>
+                                            {isToday && <span className="absolute -top-4 right-8 px-4 py-1.5 bg-teal-500 text-slate-900 text-[9px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg italic animate-pulse">Critical Today</span>}
+                                            <div className="flex items-start justify-between mb-8">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Practitioner Identity</p>
+                                                    <p className="text-xl italic font-black tracking-tight text-white uppercase">Dr. {app.doctor?.user?.name}</p>
+                                                </div>
+                                                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${app.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>{app.status}</span>
+                                            </div>
+                                            <div className="mb-10 space-y-4">
+                                                <a href={`http://maps.google.com/?q=${encodeURIComponent(app.schedule?.hospital?.name)}`} target="_blank" className="flex items-center gap-3 transition-all group">
+                                                    <div className="flex items-center justify-center w-8 h-8 transition-colors rounded-lg bg-teal-500/10 group-hover:bg-teal-500">
+                                                        <svg className="w-4 h-4 text-teal-500 group-hover:text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                    </div>
+                                                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-white border-b border-transparent group-hover:border-teal-500">{app.schedule?.hospital?.name}</span>
+                                                </a>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5">
+                                                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                    </div>
+                                                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">{app.date} • {app.schedule?.start_time}</span>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => initiateCancel(app.id)} className="w-full py-4 text-[9px] font-black uppercase tracking-[0.2em] text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-red-500/5 rounded-2xl group flex items-center justify-center gap-2">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                                                Terminate Request
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="p-20 text-center border-2 border-dashed border-white/5 bg-white/[0.01] rounded-[3rem]">
+                                <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-600 italic">No Active Consultation Sequences</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- 4. CLINICAL HISTORY (Bottom) --- */}
                     <div className="pt-24 mt-24 border-t border-white/5">
-                        <button onClick={() => document.getElementById('history-section').classList.toggle('hidden')} className="flex items-center gap-4 transition-all group">
+                        <button onClick={() => document.getElementById('history-section').classList.toggle('hidden')} className="flex items-center w-full gap-4 mb-8 transition-all group">
                             <div className="flex items-center justify-center w-12 h-12 rounded-[1.25rem] bg-white/5 border border-white/10 group-hover:bg-white/10">
                                 <svg className="w-5 h-5 text-slate-400 group-hover:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
-                            <h2 className="text-xl font-black tracking-widest uppercase text-slate-400 group-hover:text-white">Clinical History Repository</h2>
-                            <span className="text-[10px] font-black bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-slate-500 uppercase">{pastAppointments.length} Logs</span>
+                            <div className="text-left">
+                                <h2 className="text-xl font-black tracking-widest uppercase text-slate-400 group-hover:text-white">Clinical History Repository</h2>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{pastAppointments.length} Archived Logs</span>
+                            </div>
+                            <div className="ml-auto">
+                                <svg className="w-5 h-5 text-slate-500 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                            </div>
                         </button>
-                        <div id="history-section" className="grid hidden grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in slide-in-from-top-4">
+                        <div id="history-section" className="grid hidden grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in slide-in-from-top-4">
                             {pastAppointments.map(app => (
                                 <div key={app.id} className="p-6 transition-all border bg-white/[0.01] border-white/5 rounded-3xl hover:bg-white/[0.04]">
                                     <div className="flex items-start justify-between mb-4">
@@ -527,7 +492,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                     <input
                                         type="date"
                                         required
-                                        className="w-full h-16 px-6 text-lg font-bold text-white border-2 outline-none bg-slate-950 border-teal-500/50 rounded-2xl focus:ring-0 focus:border-teal-400 focus:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all"
+                                        className="w-full h-16 px-6 text-lg font-bold !text-white !bg-slate-950 border-2 border-teal-500/50 rounded-2xl focus:ring-0 focus:border-teal-400 focus:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all outline-none appearance-none"
                                         style={{ backgroundColor: '#020617', color: 'white', colorScheme: 'dark' }}
                                         value={bookingModal.date}
                                         onChange={(e) => setBookingModal({...bookingModal, date: e.target.value})}

@@ -1,21 +1,21 @@
-import { Head, useForm, router, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, useForm, router, Link, usePage } from '@inertiajs/react'; // ✅ Added usePage
+import { useState, useEffect } from 'react'; // ✅ Added useEffect
 
 /**
  * AdminDashboard Component
  * Centralized governance interface for medical staff orchestration,
- * patient data integrity, and facility logistics management.
+ * patient data integrity, facility logistics, and system inquiries.
  */
-export default function AdminDashboard({ auth, doctors, patients, appointments, stats, hospitals }) {
+export default function AdminDashboard({ auth, doctors, patients, appointments, stats, hospitals, messages }) {
+
+    const { flash } = usePage().props; // ✅ Capture flash messages
+    const [alertMessage, setAlertMessage] = useState(null); // ✅ Local alert state
 
     const [activeTab, setActiveTab] = useState('doctors');
     const [showAddDoctor, setShowAddDoctor] = useState(false);
     const [showAddHospital, setShowAddHospital] = useState(false);
 
-    /**
-     * Entity State Management
-     * Tracks the specific resource targeted for modification within modal contexts.
-     */
+    // --- Entity State Management ---
     const [editingDoctor, setEditingDoctor] = useState(null);
     const [editingPatient, setEditingPatient] = useState(null);
     const [editingHospital, setEditingHospital] = useState(null);
@@ -30,9 +30,18 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         address: '',
     });
 
+    // --- Notification Logic ---
+    useEffect(() => {
+        if (flash?.message) {
+            setAlertMessage(flash.message);
+            setTimeout(() => setAlertMessage(null), 4000);
+        }
+    }, [flash]);
+
+    // ... (Keep existing submit/update functions: submitDoctor, submitHospital, handleUpdateDoctor, etc.) ...
+
     /**
      * Specialist Provisioning
-     * Validates and persists a new medical specialist account and profile.
      */
     const submitDoctor = (e) => {
         e.preventDefault();
@@ -42,10 +51,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         });
     };
 
-    /**
-     * Facility Registration
-     * Adds a new clinical facility/hospital to the system geolocation directory.
-     */
     const submitHospital = (e) => {
         e.preventDefault();
         post(route('hospitals.store'), {
@@ -53,10 +58,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         });
     };
 
-    /**
-     * Specialist Profile Synchronization
-     * Updates professional specialization and imagery for an existing doctor.
-     */
     const handleUpdateDoctor = (e) => {
         e.preventDefault();
         post(route('doctor.profile.update'), {
@@ -68,10 +69,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         });
     };
 
-    /**
-     * Facility Data Update
-     * Updates naming and physical address parameters for a clinical facility.
-     */
     const handleUpdateHospital = (e) => {
         e.preventDefault();
         patch(route('hospitals.update', editingHospital.id), {
@@ -82,10 +79,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         });
     };
 
-    /**
-     * Patient Data Synchronization
-     * Updates core identity records for a registered patient.
-     */
     const handleUpdatePatient = (e) => {
         e.preventDefault();
         patch(route('profile.update'), data, {
@@ -93,26 +86,27 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         });
     };
 
-    /**
-     * Appointment State Transition
-     * Forces an appointment lifecycle state to 'cancelled'.
-     */
     const handleCancelAppointment = (id) => {
         if(confirm("Are you sure you want to terminate this appointment?")) {
             router.patch(route('appointments.status', id), { status: 'cancelled' });
         }
     }
 
-    /**
-     * Resource Termination
-     * Permanently deletes a user or facility record from the persistent storage.
-     */
     const handleDeleteResource = (id, resourceType) => {
         if(confirm(`Permanently remove ${resourceType} ID: ${id}?`)) {
             const endpoint = resourceType === 'Hospital' ? route('hospitals.destroy', id) : route('users.destroy', id);
             router.delete(endpoint);
         }
     }
+
+    /**
+     * ✅ NEW: Action to Delete Inquiry
+     */
+    const handleDeleteInquiry = (id) => {
+        if (confirm("Permanently delete this inquiry from the archives?")) {
+            router.delete(route('contact.destroy', id));
+        }
+    };
 
     const handleLogout = (e) => { e.preventDefault(); router.post(route('logout')); };
 
@@ -121,6 +115,16 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
             <Head title="System Administration" />
 
             <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-teal-500/30">
+
+                {/* --- TOAST NOTIFICATION --- */}
+                {alertMessage && (
+                    <div className="fixed z-[100] top-24 left-1/2 -translate-x-1/2 animate-in slide-in-from-top-4 duration-300">
+                        <div className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest bg-teal-500 border border-teal-400 shadow-2xl text-slate-900 rounded-2xl">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                            {alertMessage}
+                        </div>
+                    </div>
+                )}
 
                 {/* --- TOP NAVIGATION BAR --- */}
                 <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
@@ -135,7 +139,7 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                         </Link>
 
                         <div className="hidden p-1 space-x-2 border md:flex bg-black/20 rounded-2xl border-white/5">
-                            {['doctors', 'patients', 'hospitals', 'appointments'].map((tab) => (
+                            {['doctors', 'patients', 'hospitals', 'appointments', 'inquiries'].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -161,11 +165,12 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                 <main className="px-8 pt-32 pb-20 mx-auto max-w-[1600px]">
 
                     {/* SYSTEM METRICS SECTION */}
-                    <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-4">
                         {[
                             { label: 'Registered Specialists', val: stats.total_doctors, color: 'border-teal-500/20', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
                             { label: 'Total Patient Accounts', val: stats.total_patients, color: 'border-blue-500/20', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-                            { label: 'Active Appointments', val: stats.total_appointments, color: 'border-purple-500/20', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' }
+                            { label: 'Active Appointments', val: stats.total_appointments, color: 'border-purple-500/20', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                            { label: 'System Inquiries', val: stats.total_messages || 0, color: 'border-orange-500/20', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' }
                         ].map((stat, i) => (
                             <div key={i} className={`p-8 border bg-white/[0.02] backdrop-blur-md rounded-[2rem] ${stat.color} transition-all hover:bg-white/[0.04]`}>
                                 <div className="flex items-center justify-between">
@@ -329,11 +334,49 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             </div>
                         )}
 
+                        {/* 5. SYSTEM INQUIRIES (NEW) */}
+                        {activeTab === 'inquiries' && (
+                            <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
+                                <h2 className="mb-10 text-3xl italic font-black leading-none tracking-tight text-white">Support & Inquiries</h2>
+                                <div className="grid grid-cols-1 gap-6">
+                                    {messages && messages.length > 0 ? messages.map(msg => (
+                                        <div key={msg.id} className="p-8 bg-white/[0.02] border border-white/5 rounded-[2rem] hover:bg-white/[0.04] transition-all relative group">
+                                            <div className="flex items-start justify-between mb-6">
+                                                <div>
+                                                    <h3 className="text-lg font-black text-white">{msg.full_name}</h3>
+                                                    <p className="font-mono text-xs font-bold text-teal-500">{msg.email}</p>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/5 px-3 py-1 rounded-lg">
+                                                        {new Date(msg.created_at).toLocaleDateString()}
+                                                    </span>
+                                                    {/* ✅ DELETE BUTTON */}
+                                                    <button
+                                                        onClick={() => handleDeleteInquiry(msg.id)}
+                                                        className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="p-6 border bg-black/20 rounded-2xl border-white/5">
+                                                <p className="text-sm font-medium leading-relaxed text-slate-300">"{msg.message}"</p>
+                                            </div>
+                                        </div>
+                                    )) : (
+                                        <div className="p-20 text-center border border-dashed border-white/10 rounded-[2rem]">
+                                            <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-600">No Pending Inquiries</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </main>
 
-                {/* --- UNIVERSAL MODALS --- */}
-
+                {/* --- UNIVERSAL MODALS (Doctor, Patient, Hospital Editing Logic) --- */}
+                {/* (Kept exactly as previous version - modals for editing users/hospitals) */}
                 {editingDoctor && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className="w-full max-w-lg p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl">
