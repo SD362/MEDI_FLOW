@@ -2,32 +2,68 @@ import { Link, Head, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
 /**
- * Patient Dashboard Component
- * Centralized portal for health consumers.
- * Orchestrates doctor discovery, dynamic scheduling, and clinical history oversight.
+ * PatientDashboard Component
+ * * The central command node for authenticated patients.
+ * * Architectural Overview:
+ * 1. Data Orchestration: Merges props (doctors, appointments) with local state.
+ * 2. Event Handling: Manages booking flows and cancellation requests.
+ * 3. Visualization: Renders interactive calendar and appointment timelines.
+ * * @param {Object} auth - Authenticated user session payload.
+ * @param {Array} doctors - Full dataset of available practitioners and their schedules.
+ * @param {Object} filters - Server-side query parameters for pre-loading search states.
+ * @param {Array} specialties - List of distinct medical categories for the filter dropdown.
+ * @param {Array} myAppointments - Chronological list of user's interaction history.
  */
 export default function PatientDashboard({ auth, doctors, filters, specialties, myAppointments }) {
 
     const { flash } = usePage().props;
+
+    // --- UI & Interaction State ---
     const [alertMessage, setAlertMessage] = useState(null);
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+
+    // --- Calendar & Dataset State ---
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
     const [filteredDoctors, setFilteredDoctors] = useState([]);
     const [notifications, setNotifications] = useState([]);
-    const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
+    // --- Modal Interface State ---
+    // bookingModal: Holds temporary object { scheduleId, date, doctorName, availableDays }
+    const [bookingModal, setBookingModal] = useState(null);
+    // cancelModalId: Stores the integer ID of the appointment targeted for termination.
+    const [cancelModalId, setCancelModalId] = useState(null);
+
+    // ISO string for HTML5 date input minimum constraints (prevents past-date selection).
     const todayISO = new Date().toISOString().split('T')[0];
 
+    /**
+     * Feedback Loop: Flash Messages
+     * Listens for backend flash data and triggers the visual toast notification.
+     * Auto-dismisses after 4000ms to prevent UI clutter.
+     */
     useEffect(() => {
         if (flash?.message) {
-            setAlertMessage(flash.message);
-            const timer = setTimeout(() => setAlertMessage(null), 4000);
-            return () => clearTimeout(timer);
+            triggerNotification(flash.message);
         }
     }, [flash]);
 
+    /**
+     * Utility: Notification Trigger
+     * Centralized function to display transient success/error messages.
+     */
+    const triggerNotification = (msg) => {
+        setAlertMessage(msg);
+        setTimeout(() => setAlertMessage(null), 4000);
+    };
+
+    /**
+     * Data Logic: Appointment Segmentation
+     * Splits the raw appointment array into 'Active' (Pending/Confirmed) and
+     * 'Historical' (Completed/Cancelled) subsets for UI organization.
+     */
     const activeAppointments = myAppointments?.filter(app =>
         app.status === 'pending' || app.status === 'confirmed'
     ) || [];
@@ -36,6 +72,10 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         app.status === 'completed' || app.status === 'cancelled'
     ) || [];
 
+    /**
+     * Data Logic: Notification Synthesis
+     * Transforms active appointment status changes into a readable notification stream.
+     */
     useEffect(() => {
         const alerts = myAppointments?.filter(app => app.status !== 'pending').map(app => ({
             id: app.id,
@@ -45,6 +85,10 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         setNotifications(alerts);
     }, [myAppointments]);
 
+    /**
+     * Initialization: Filter Pre-loading
+     * Parses URL query parameters to hydrate search/category states on initial load.
+     */
     useEffect(() => {
         if (filters?.doctor_id) {
             const targetDoctor = doctors.find(d => d.id == filters.doctor_id);
@@ -55,6 +99,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         }
     }, []);
 
+    // --- Calendar Logic ---
     const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     const getDaysInMonth = (year, month) => {
@@ -71,16 +116,42 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const padDays = Array(firstDayOfMonth).fill(null);
 
-    const isDayAvailable = (dateObj) => {
-        if (!dateObj) return false;
-        if (!selectedCategory && !searchTerm) return false;
+    /**
+     * Helper: Doctor Availability Extractor
+     * Retrieves the list of doctors available on a specific calendar day.
+     * Used for the visual "dot" indicators on the calendar.
+     */
+    const getDoctorsOnDay = (dateObj) => {
         const dayName = weekDays[dateObj.getDay()];
-        return filteredDoctors.some(doc => doc.schedules.some(s => s.day === dayName));
+        return filteredDoctors.filter(doc => doc.schedules.some(s => s.day === dayName));
     };
 
+    /**
+     * Helper: Day Availability Check
+     * Boolean check to see if *any* currently filtered doctor has a slot on a specific date.
+     * Used to disable/enable calendar interaction.
+     */
+    const isDayAvailable = (dateObj) => {
+        if (!dateObj) return false;
+        // Check availability against the current filtered list
+        return getDoctorsOnDay(dateObj).length > 0;
+    };
+
+    /**
+     * Core Engine: Multi-Factor Filtering
+     * The primary logic hook that updates the displayed doctor list.
+     * It intersects three conditions:
+     * 1. Category Selection
+     * 2. Search Term (Name or Specialization)
+     * 3. Selected Calendar Date (Day of week match)
+     */
     useEffect(() => {
         let results = doctors;
-        if (selectedCategory) results = results.filter(doc => doc.specialization === selectedCategory);
+
+        if (selectedCategory) {
+            results = results.filter(doc => doc.specialization === selectedCategory);
+        }
+
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
             results = results.filter(doc =>
@@ -88,10 +159,12 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                 doc.specialization.toLowerCase().includes(lowerTerm)
             );
         }
+
         if (selectedDate) {
             const selectedDayName = weekDays[selectedDate.getDay()];
             results = results.filter(doc => doc.schedules.some(s => s.day === selectedDayName));
         }
+
         setFilteredDoctors(results);
     }, [selectedCategory, searchTerm, selectedDate, doctors]);
 
@@ -103,17 +176,57 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
         setSelectedDate(null);
     };
 
-    const handleBook = (scheduleId) => {
+    /**
+     * Interaction: Stage Booking
+     * Opens the confirmation modal with pre-filled data.
+     * Now accepts availableDays to display in the modal UI.
+     */
+    const handleBook = (scheduleId, doctorName, availableDays) => {
         const defaultDate = selectedDate ? selectedDate.toISOString().split('T')[0] : todayISO;
-        const date = prompt("Verify and authorize appointment date (YYYY-MM-DD):", defaultDate);
-        if (date) {
-            router.post(route('appointments.store'), { schedule_id: scheduleId, date: date });
+        setBookingModal({
+            scheduleId,
+            date: defaultDate,
+            doctorName: doctorName,
+            availableDays: availableDays // Stores the specific days this doctor works
+        });
+    };
+
+    /**
+     * Interaction: Commit Booking
+     * Submits the staged modal data to the backend via Inertia router.
+     */
+    const confirmBooking = (e) => {
+        e.preventDefault();
+        if (bookingModal) {
+            router.post(route('appointments.store'), {
+                schedule_id: bookingModal.scheduleId,
+                date: bookingModal.date
+            }, {
+                onSuccess: () => setBookingModal(null)
+            });
         }
     };
 
-    const handleCancel = (id) => {
-        if (confirm("Permanently abort this consultation request?")) {
-            router.patch(route('appointments.status', id), { status: 'cancelled' });
+    /**
+     * Interaction: Stage Cancellation
+     * Sets the target ID for the destruction modal.
+     */
+    const initiateCancel = (id) => {
+        setCancelModalId(id);
+    };
+
+    /**
+     * Interaction: Commit Cancellation
+     * Executes the PATCH request to finalize appointment termination.
+     */
+    const confirmCancel = () => {
+        if (cancelModalId) {
+            router.patch(route('appointments.status', cancelModalId), { status: 'cancelled' }, {
+                onSuccess: () => {
+                    setCancelModalId(null);
+                    triggerNotification("Consultation sequence terminated successfully.");
+                }
+            });
         }
     };
 
@@ -133,18 +246,16 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                     </div>
                 )}
 
-                {/* --- NAVIGATION INTERFACE --- */}
                 <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
                     <div className="px-6 mx-auto max-w-7xl lg:px-8">
                         <div className="flex items-center justify-between h-20">
                             <Link href="/" className="flex items-center gap-3 group">
-                                <div className="flex items-center justify-center w-10 h-10 transition-transform bg-teal-500 shadow-lg rounded-xl group-hover:rotate-6 shadow-teal-500/20">
+                                <div className="flex items-center justify-center w-10 h-10 transition-transform bg-teal-500 rounded-xl group-hover:rotate-6">
                                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                                 </div>
                                 <span className="text-xl font-bold tracking-tighter text-white uppercase">MediFlow <span className="text-teal-500 text-[10px] font-black tracking-widest ml-1">Node</span></span>
                             </Link>
 
-                            {/* ✅ ADDED NAVIGATION TABS */}
                             <div className="hidden p-1 space-x-1 border md:flex bg-black/20 rounded-2xl border-white/5">
                                 <Link href="/" className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Home</Link>
                                 <Link href={route('specialists')} className="px-6 py-2 text-xs font-bold tracking-widest uppercase transition rounded-xl text-slate-400 hover:text-white">Doctors</Link>
@@ -184,7 +295,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
 
                 <main className="px-6 pt-40 pb-20 mx-auto max-w-7xl lg:px-8">
 
-                    {/* --- SYSTEM SEARCH --- */}
+                    {/* --- Filter & Search Section --- */}
                     <div className="flex justify-center mb-16">
                         <div className="relative w-full max-w-3xl">
                             <input type="text" placeholder={selectedCategory ? `Filter ${selectedCategory} Specialists...` : "Identify Practitioner or Clinical Field..."} className="w-full h-16 px-16 text-sm font-medium text-white transition-all border outline-none bg-white/[0.02] border-white/10 rounded-[2rem] focus:ring-2 focus:ring-teal-500 backdrop-blur-xl" value={searchTerm} onChange={handleTyping} />
@@ -194,13 +305,12 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         </div>
                     </div>
 
-                    {/* --- ACTIVE ENGAGEMENTS --- */}
+                    {/* --- Active Appointments Grid --- */}
                     <div className="mb-20">
                         <div className="flex items-center gap-3 mb-10">
                             <h2 className="text-3xl italic font-black tracking-tight text-white uppercase">Active Consultations</h2>
                             <span className="h-[2px] flex-1 bg-white/5"></span>
                         </div>
-
                         {activeAppointments.length > 0 ? (
                             <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
                                 {activeAppointments.map(app => {
@@ -229,7 +339,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">{app.date} • {app.schedule?.start_time}</span>
                                                 </div>
                                             </div>
-                                            <button onClick={() => handleCancel(app.id)} className="w-full py-4 text-[9px] font-black uppercase tracking-[0.2em] text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-red-500/5 rounded-2xl group flex items-center justify-center gap-2">
+                                            <button onClick={() => initiateCancel(app.id)} className="w-full py-4 text-[9px] font-black uppercase tracking-[0.2em] text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-red-500/5 rounded-2xl group flex items-center justify-center gap-2">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
                                                 Terminate Request
                                             </button>
@@ -244,12 +354,12 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         )}
                     </div>
 
-                    {/* --- SCHEDULING INTERFACE --- */}
                     <div className="grid grid-cols-1 gap-12 lg:grid-cols-4">
                         <div className="space-y-10 lg:col-span-1">
+                            {/* Specialties */}
                             <div className="p-8 border bg-white/[0.02] border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-md">
                                 <h3 className="text-sm font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-3">
-                                    <svg className="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    <svg className="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                                     Specialties
                                 </h3>
                                 <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
@@ -259,6 +369,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                 </div>
                             </div>
 
+                            {/* Calendar Widget */}
                             <div className={`p-8 border bg-white/[0.02] border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-md transition-all ${!selectedCategory && !searchTerm ? 'opacity-20 grayscale pointer-events-none' : 'opacity-100'}`}>
                                 <div className="flex items-center justify-between mb-8">
                                     <h3 className="text-[11px] font-black uppercase tracking-widest text-white italic">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
@@ -272,13 +383,29 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                     {daysInMonth.map((dayObj, i) => {
                                         const isAvailable = isDayAvailable(dayObj);
                                         const isSelected = selectedDate && dayObj.toDateString() === selectedDate.toDateString();
-                                        return <button key={i} disabled={!isAvailable} onClick={() => setSelectedDate(isSelected ? null : dayObj)} className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${isSelected ? 'bg-teal-500 text-slate-900' : isAvailable ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500 hover:text-slate-900' : 'text-slate-700'}`}>{dayObj.getDate()}</button>;
+                                        return (
+                                            <button
+                                                key={i}
+                                                disabled={!isAvailable}
+                                                onClick={() => setSelectedDate(isSelected ? null : dayObj)}
+                                                className={`h-10 w-full rounded-xl flex items-center justify-center text-[10px] font-black transition-all relative group
+                                                    ${isSelected ? 'bg-teal-500 text-slate-900 shadow-lg shadow-teal-500/20' :
+                                                      isAvailable ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500 hover:text-slate-900 ring-1 ring-teal-500/20' :
+                                                      'text-slate-700 opacity-50'}`}
+                                            >
+                                                {dayObj.getDate()}
+                                                {/* Visual Dot for Availability */}
+                                                {isAvailable && !isSelected && (
+                                                    <span className="absolute bottom-1.5 w-1 h-1 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
+                                                )}
+                                            </button>
+                                        );
                                     })}
                                 </div>
                             </div>
                         </div>
 
-                        {/* --- PRACTITIONER RESULTS --- */}
+                        {/* Practitioners */}
                         <div className="lg:col-span-3">
                             {!selectedCategory && !searchTerm ? (
                                 <div className="p-20 text-center border-2 border-dashed border-white/5 bg-white/[0.01] rounded-[3rem] min-h-[500px] flex flex-col justify-center">
@@ -308,17 +435,31 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                                             <span className="text-[10px] font-black text-white uppercase tracking-tighter block mb-0.5">{schedule.day}</span>
                                                             <span className="text-[9px] font-bold text-slate-600 uppercase truncate block max-w-[120px]">{schedule.hospital?.name}</span>
                                                         </div>
-                                                        <button onClick={() => handleBook(schedule.id)} className="h-8 px-4 bg-teal-500/10 text-teal-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-teal-500 hover:text-slate-900 transition-all">{schedule.start_time}</button>
+                                                        <button
+                                                            onClick={() => {
+                                                                const availableDays = [...new Set(doctor.schedules.map(s => s.day))].join(', ');
+                                                                handleBook(schedule.id, doctor.user.name, availableDays);
+                                                            }}
+                                                            className="h-8 px-4 bg-teal-500/10 text-teal-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-teal-500 hover:text-slate-900 transition-all"
+                                                        >
+                                                            {schedule.start_time}
+                                                        </button>
                                                     </div>
                                                 )) : <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700 italic text-center py-2">No Active Slots</p>}
                                             </div>
-
-                                            {/* ✅ UPDATED BOOKING BUTTON: Matches Image Style */}
                                             <button
-                                                onClick={() => { const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]); if (validSchedule) handleBook(validSchedule.id); else alert("Conflict identified."); }}
+                                                onClick={() => {
+                                                    const validSchedule = doctor.schedules.find(s => !selectedDate || s.day === weekDays[selectedDate.getDay()]);
+                                                    if (validSchedule) {
+                                                        const availableDays = [...new Set(doctor.schedules.map(s => s.day))].join(', ');
+                                                        handleBook(validSchedule.id, doctor.user.name, availableDays);
+                                                    } else {
+                                                        triggerNotification("Scheduling Conflict: No available slots matching your selection criteria.");
+                                                    }
+                                                }}
                                                 className="w-full h-14 bg-teal-500 text-slate-900 rounded-[1.25rem] font-bold text-[10px] uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 transition-all active:scale-95 flex items-center justify-center gap-3"
                                             >
-                                                INITIATE BOOKING
+                                                ESTABLISH LINK
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
                                             </button>
                                         </div>
@@ -328,11 +469,10 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         </div>
                     </div>
 
-                    {/* --- VISIT HISTORY --- */}
                     <div className="pt-24 mt-24 border-t border-white/5">
                         <button onClick={() => document.getElementById('history-section').classList.toggle('hidden')} className="flex items-center gap-4 transition-all group">
                             <div className="flex items-center justify-center w-12 h-12 rounded-[1.25rem] bg-white/5 border border-white/10 group-hover:bg-white/10">
-                                <svg className="w-5 h-5 text-slate-400 group-hover:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <svg className="w-5 h-5 text-slate-400 group-hover:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
                             <h2 className="text-xl font-black tracking-widest uppercase text-slate-400 group-hover:text-white">Clinical History Repository</h2>
                             <span className="text-[10px] font-black bg-white/5 border border-white/10 px-3 py-1 rounded-lg text-slate-500 uppercase">{pastAppointments.length} Logs</span>
@@ -362,6 +502,85 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                         </div>
                     </div>
                 </main>
+
+                {/* --- BOOKING CONFIRMATION MODAL --- */}
+                {bookingModal && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
+                        <div className="w-full max-w-lg p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+
+                            {/* Decorative Glow */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 blur-[80px] -z-10"></div>
+
+                            <h3 className="mb-2 text-2xl italic font-black text-white">Authorize Appointment</h3>
+                            <p className="mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Initiating sequence for Dr. {bookingModal.doctorName}</p>
+
+                            {/* ✅ VISUAL DISPLAY OF AVAILABLE DAYS */}
+                            <div className="mb-8 p-6 rounded-3xl bg-white/[0.03] border border-white/5">
+                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-teal-500 mb-2">Operational Windows</p>
+                                <p className="text-sm font-bold leading-relaxed text-white">{bookingModal.availableDays || "No Schedule Available"}</p>
+                            </div>
+
+                            <form onSubmit={confirmBooking} className="space-y-8">
+                                <div>
+                                    <label className="block mb-3 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Selected Clinical Date</label>
+                                    {/* ✅ UPDATED DATE INPUT STYLE: Explicit inline styles force Dark Mode */}
+                                    <input
+                                        type="date"
+                                        required
+                                        className="w-full h-16 px-6 text-lg font-bold text-white border-2 outline-none bg-slate-950 border-teal-500/50 rounded-2xl focus:ring-0 focus:border-teal-400 focus:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all"
+                                        style={{ backgroundColor: '#020617', color: 'white', colorScheme: 'dark' }}
+                                        value={bookingModal.date}
+                                        onChange={(e) => setBookingModal({...bookingModal, date: e.target.value})}
+                                        min={todayISO}
+                                    />
+                                </div>
+                                <div className="flex gap-4">
+                                    <button
+                                        type="submit"
+                                        className="flex-1 h-16 bg-teal-500 text-slate-900 rounded-[1.25rem] font-bold text-xs uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(20,184,166,0.4)] hover:bg-teal-400 hover:scale-[1.02] active:scale-95 transition-all"
+                                    >
+                                        CONFIRM ALLOCATION
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBookingModal(null)}
+                                        className="flex-1 h-16 bg-slate-800 text-slate-400 border border-white/10 rounded-[1.25rem] font-bold text-xs uppercase tracking-[0.2em] hover:bg-slate-700 hover:text-white active:scale-95 transition-all"
+                                    >
+                                        ABORT
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- TERMINATION CONFIRMATION MODAL --- */}
+                {cancelModalId && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
+                        <div className="w-full max-w-md p-10 border border-red-500/20 bg-slate-900 rounded-[3rem] shadow-2xl relative">
+                            <div className="absolute top-0 left-0 w-full h-full bg-red-500/5 blur-[80px] -z-10"></div>
+                            <h3 className="mb-4 text-2xl italic font-black text-white">Abort Consultation?</h3>
+                            <p className="mb-8 text-xs font-medium leading-relaxed text-slate-400">
+                                This action is irreversible. The appointment slot will be released immediately.
+                            </p>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={confirmCancel}
+                                    className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-red-500 text-white rounded-[1.25rem] shadow-xl hover:bg-red-400 active:scale-95 transition-all"
+                                >
+                                    CONFIRM ABORT
+                                </button>
+                                <button
+                                    onClick={() => setCancelModalId(null)}
+                                    className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
+                                >
+                                    RETURN
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </>
     );
