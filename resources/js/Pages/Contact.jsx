@@ -228,7 +228,7 @@ export default function Contact({ auth, hospitals }) {
                                         disabled={processing}
                                         className="w-full h-16 bg-teal-500 text-slate-900 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-teal-500/10 hover:bg-teal-400 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {processing ? 'Dispatching...' : 'Dispatch Inquiry'}
+                                        {processing ? 'Dispatching...' : 'Send Inquiry'}
                                     </button>
                                 </form>
                             </div>

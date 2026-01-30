@@ -1,24 +1,43 @@
-import { Head, useForm, router, Link, usePage } from '@inertiajs/react'; // ✅ Added usePage
-import { useState, useEffect } from 'react'; // ✅ Added useEffect
+import { Head, useForm, router, Link, usePage } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 
-/**
- * AdminDashboard Component
- * Centralized governance interface for medical staff orchestration,
- * patient data integrity, facility logistics, and system inquiries.
- */
 export default function AdminDashboard({ auth, doctors, patients, appointments, stats, hospitals, messages }) {
 
-    const { flash } = usePage().props; // ✅ Capture flash messages
-    const [alertMessage, setAlertMessage] = useState(null); // ✅ Local alert state
+    const { flash } = usePage().props;
+    const [alertMessage, setAlertMessage] = useState(null);
 
     const [activeTab, setActiveTab] = useState('doctors');
     const [showAddDoctor, setShowAddDoctor] = useState(false);
     const [showAddHospital, setShowAddHospital] = useState(false);
 
-    // --- Entity State Management ---
     const [editingDoctor, setEditingDoctor] = useState(null);
     const [editingPatient, setEditingPatient] = useState(null);
     const [editingHospital, setEditingHospital] = useState(null);
+
+    const [confirmModal, setConfirmModal] = useState(null);
+
+    // List of Sri Lankan Government Hospital Disciplines
+    const disciplines = [
+        "Cardiologist",
+        "Dermatologist",
+        "Endocrinologist",
+        "Gastroenterologist",
+        "General Physician",
+        "Gynecologist",
+        "Neurologist",
+        "Oncologist",
+        "Ophthalmologist", // Eye
+        "Orthopedic Surgeon",
+        "Otolaryngologist", // Ear, Nose, Throat (ENT)
+        "Pediatrician",
+        "Psychiatrist",
+        "Pulmonologist",
+        "Radiologist",
+        "Rheumatologist",
+        "Urologist",
+        "General Surgeon",
+        "Anesthesiologist"
+    ];
 
     const { data, setData, post, patch, processing, errors, reset } = useForm({
         name: '',
@@ -30,7 +49,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         address: '',
     });
 
-    // --- Notification Logic ---
     useEffect(() => {
         if (flash?.message) {
             setAlertMessage(flash.message);
@@ -38,11 +56,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         }
     }, [flash]);
 
-    // ... (Keep existing submit/update functions: submitDoctor, submitHospital, handleUpdateDoctor, etc.) ...
-
-    /**
-     * Specialist Provisioning
-     */
     const submitDoctor = (e) => {
         e.preventDefault();
         post(route('doctors.store'), {
@@ -60,10 +73,8 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
 
     const handleUpdateDoctor = (e) => {
         e.preventDefault();
-        post(route('doctor.profile.update'), {
-            _method: 'post',
+        patch(route('doctors.update', editingDoctor.id), {
             specialization: data.specialization,
-            image: data.image
         }, {
             onSuccess: () => setEditingDoctor(null)
         });
@@ -87,24 +98,52 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
     };
 
     const handleCancelAppointment = (id) => {
-        if(confirm("Are you sure you want to terminate this appointment?")) {
-            router.patch(route('appointments.status', id), { status: 'cancelled' });
-        }
+        setConfirmModal({
+            type: 'cancel_appointment',
+            id: id,
+            title: "Terminate Appointment?",
+            message: "Are you sure you want to cancel this appointment? This action cannot be undone.",
+            color: 'red'
+        });
     }
 
     const handleDeleteResource = (id, resourceType) => {
-        if(confirm(`Permanently remove ${resourceType} ID: ${id}?`)) {
-            const endpoint = resourceType === 'Hospital' ? route('hospitals.destroy', id) : route('users.destroy', id);
-            router.delete(endpoint);
-        }
+        setConfirmModal({
+            type: 'delete_resource',
+            id: id,
+            resourceType: resourceType,
+            title: `Remove ${resourceType}?`,
+            message: `Permanently delete this ${resourceType}? All associated records will be removed from the database.`,
+            color: 'red'
+        });
     }
 
-    /**
-     * ✅ NEW: Action to Delete Inquiry
-     */
     const handleDeleteInquiry = (id) => {
-        if (confirm("Permanently delete this inquiry from the archives?")) {
-            router.delete(route('contact.destroy', id));
+        setConfirmModal({
+            type: 'delete_inquiry',
+            id: id,
+            title: "Delete Inquiry?",
+            message: "Remove this message from the archives permanently?",
+            color: 'red'
+        });
+    };
+
+    const executeAction = () => {
+        if (!confirmModal) return;
+
+        if (confirmModal.type === 'cancel_appointment') {
+            router.patch(route('appointments.status', confirmModal.id), { status: 'cancelled' }, {
+                onSuccess: () => setConfirmModal(null)
+            });
+        } else if (confirmModal.type === 'delete_resource') {
+            const endpoint = confirmModal.resourceType === 'Hospital' ? route('hospitals.destroy', confirmModal.id) : route('users.destroy', confirmModal.id);
+            router.delete(endpoint, {
+                onSuccess: () => setConfirmModal(null)
+            });
+        } else if (confirmModal.type === 'delete_inquiry') {
+            router.delete(route('contact.destroy', confirmModal.id), {
+                onSuccess: () => setConfirmModal(null)
+            });
         }
     };
 
@@ -116,7 +155,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
 
             <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-teal-500/30">
 
-                {/* --- TOAST NOTIFICATION --- */}
                 {alertMessage && (
                     <div className="fixed z-[100] top-24 left-1/2 -translate-x-1/2 animate-in slide-in-from-top-4 duration-300">
                         <div className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest bg-teal-500 border border-teal-400 shadow-2xl text-slate-900 rounded-2xl">
@@ -126,7 +164,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                     </div>
                 )}
 
-                {/* --- TOP NAVIGATION BAR --- */}
                 <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
                     <div className="flex items-center justify-between h-20 px-8 mx-auto max-w-[1600px]">
                         <Link href="/" className="flex items-center gap-3 group">
@@ -164,7 +201,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
 
                 <main className="px-8 pt-32 pb-20 mx-auto max-w-[1600px]">
 
-                    {/* SYSTEM METRICS SECTION */}
                     <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-4">
                         {[
                             { label: 'Registered Specialists', val: stats.total_doctors, color: 'border-teal-500/20', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
@@ -188,7 +224,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
 
                     <div className="relative p-1 border bg-white/[0.02] border-white/5 rounded-[2.5rem]">
 
-                        {/* 1. DOCTOR MANAGEMENT */}
                         {activeTab === 'doctors' && (
                             <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
                                 <div className="flex items-center justify-between mb-10">
@@ -197,7 +232,7 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                         <p className="text-[10px] text-slate-500 mt-1 font-bold uppercase tracking-widest">Medical Personnel Administration</p>
                                     </div>
                                     <button onClick={() => setShowAddDoctor(!showAddDoctor)} className={`px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${showAddDoctor ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-teal-500 text-slate-900 shadow-xl'}`}>
-                                        {showAddDoctor ? 'Abort Entry' : 'Enlist Specialist'}
+                                        {showAddDoctor ? 'Discard Entry' : 'Add Specialist'}
                                     </button>
                                 </div>
 
@@ -207,7 +242,22 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                             <input type="text" placeholder="Full Name" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.name} onChange={e => setData('name', e.target.value)} required />
                                             <input type="email" placeholder="Email Address" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.email} onChange={e => setData('email', e.target.value)} required />
                                             <input type="password" placeholder="Access Password" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.password} onChange={e => setData('password', e.target.value)} required />
-                                            <input type="text" placeholder="Discipline (e.g. Neurology)" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.specialization} onChange={e => setData('specialization', e.target.value)} required />
+                                            <div className="relative">
+                                                <select 
+                                                    className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" 
+                                                    value={data.specialization} 
+                                                    onChange={e => setData('specialization', e.target.value)} 
+                                                    required
+                                                >
+                                                    <option value="" disabled>Select Discipline</option>
+                                                    {disciplines.map((discipline, index) => (
+                                                        <option key={index} value={discipline} className="text-white bg-slate-900">{discipline}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-500">
+                                                    <svg className="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                </div>
+                                            </div>
                                             <button className="col-span-2 h-16 font-black uppercase tracking-widest text-[10px] bg-teal-500 rounded-[1.25rem] text-slate-900 shadow-lg">Authenticate Account</button>
                                         </form>
                                     </div>
@@ -225,7 +275,7 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                                     <td className="p-6"><span className="text-[10px] font-black uppercase tracking-wider text-teal-400">{doc.specialization}</span></td>
                                                     <td className="p-6 space-x-6 text-right">
                                                         <button onClick={() => {setEditingDoctor(doc); setData('specialization', doc.specialization);}} className="text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300">Modify</button>
-                                                        <button onClick={() => handleDeleteResource(doc.user.id, 'Doctor')} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Decommission</button>
+                                                        <button onClick={() => handleDeleteResource(doc.user.id, 'Doctor')} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Remove</button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -235,7 +285,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             </div>
                         )}
 
-                        {/* 2. PATIENT MANAGEMENT */}
                         {activeTab === 'patients' && (
                             <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
                                 <h2 className="mb-10 text-3xl italic font-black tracking-tight text-white">Patient Database</h2>
@@ -261,7 +310,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             </div>
                         )}
 
-                        {/* 3. FACILITY OPERATIONS */}
                         {activeTab === 'hospitals' && (
                             <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
                                 <div className="flex items-center justify-between mb-10">
@@ -301,7 +349,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             </div>
                         )}
 
-                        {/* 4. APPOINTMENT OVERSIGHT */}
                         {activeTab === 'appointments' && (
                             <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
                                 <h2 className="mb-10 text-3xl italic font-black leading-none tracking-tight text-white">Global Appointment Logs</h2>
@@ -334,7 +381,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             </div>
                         )}
 
-                        {/* 5. SYSTEM INQUIRIES (NEW) */}
                         {activeTab === 'inquiries' && (
                             <div className="p-8 animate-in fade-in slide-in-from-bottom-4">
                                 <h2 className="mb-10 text-3xl italic font-black leading-none tracking-tight text-white">Support & Inquiries</h2>
@@ -350,7 +396,6 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/5 px-3 py-1 rounded-lg">
                                                         {new Date(msg.created_at).toLocaleDateString()}
                                                     </span>
-                                                    {/* ✅ DELETE BUTTON */}
                                                     <button
                                                         onClick={() => handleDeleteInquiry(msg.id)}
                                                         className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
@@ -375,14 +420,27 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                     </div>
                 </main>
 
-                {/* --- UNIVERSAL MODALS (Doctor, Patient, Hospital Editing Logic) --- */}
-                {/* (Kept exactly as previous version - modals for editing users/hospitals) */}
                 {editingDoctor && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className="w-full max-w-lg p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl">
                             <h3 className="mb-8 text-2xl italic font-black text-white">Update Specialization</h3>
                             <form onSubmit={handleUpdateDoctor} className="space-y-8">
-                                <input type="text" className="w-full px-6 text-white border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.specialization} onChange={e => setData('specialization', e.target.value)} />
+                                <div className="relative">
+                                    <select 
+                                        className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" 
+                                        value={data.specialization} 
+                                        onChange={e => setData('specialization', e.target.value)}
+                                        required
+                                    >
+                                        <option value="" disabled>Select Discipline</option>
+                                        {disciplines.map((discipline, index) => (
+                                            <option key={index} value={discipline} className="text-white bg-slate-900">{discipline}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-500">
+                                        <svg className="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                    </div>
+                                </div>
                                 <div className="flex gap-4">
                                     <button type="submit" className="flex-1 h-14 font-black uppercase tracking-widest text-[10px] bg-teal-500 text-slate-900 rounded-2xl shadow-lg">Save Changes</button>
                                     <button type="button" onClick={() => setEditingDoctor(null)} className="flex-1 h-14 font-black uppercase tracking-widest text-[10px] bg-white/5 text-slate-400 rounded-2xl">Cancel</button>
@@ -420,6 +478,30 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                     <button type="button" onClick={() => setEditingHospital(null)} className="flex-1 h-14 font-black uppercase tracking-widest text-[10px] bg-white/5 text-slate-400 rounded-2xl">Cancel</button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {confirmModal && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
+                        <div className={`w-full max-w-md p-10 border bg-slate-900 rounded-[3rem] shadow-2xl ${confirmModal.color === 'red' ? 'border-red-500/20' : 'border-teal-500/20'}`}>
+                            <div className={`absolute top-0 left-0 w-full h-full blur-[80px] -z-10 ${confirmModal.color === 'red' ? 'bg-red-500/5' : 'bg-teal-500/5'}`}></div>
+                            <h3 className="mb-4 text-2xl italic font-black text-white">{confirmModal.title}</h3>
+                            <p className="mb-8 text-xs font-medium leading-relaxed text-slate-400">{confirmModal.message}</p>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={executeAction} 
+                                    className={`flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] text-white rounded-[1.25rem] shadow-xl active:scale-95 transition-all ${confirmModal.color === 'red' ? 'bg-red-500 hover:bg-red-400' : 'bg-teal-500 text-slate-900 hover:bg-teal-400'}`}
+                                >
+                                    CONFIRM
+                                </button>
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
+                                    className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
+                                >
+                                    ABORT
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -16,9 +16,6 @@ use App\Models\Appointment;
 use App\Models\Doctor;
 use App\Models\ContactMessage;
 
-/**
- * Public Access Routes
- */
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
@@ -36,7 +33,6 @@ Route::get('/contact', function () {
     ]);
 })->name('contact');
 
-// Route to handle Contact Form Submission
 Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
 
 Route::get('/specialists', function () {
@@ -52,11 +48,6 @@ Route::get('/specialists', function () {
     ]);
 })->name('specialists');
 
-
-/**
- * Unified Dashboard Controller
- * Fetches and injects necessary datasets based on the authenticated User Role.
- */
 Route::get('/dashboard', function () {
     $user = auth()->user();
     $role = $user->role;
@@ -67,10 +58,7 @@ Route::get('/dashboard', function () {
             'patients' => User::where('role', 'patient')->get(),
             'hospitals' => Hospital::all(),
             'appointments' => Appointment::with(['user', 'doctor.user', 'schedule.hospital'])->get(),
-
-            // Fetch Contact Messages for Admin View
             'messages' => ContactMessage::orderBy('created_at', 'desc')->get(),
-
             'stats' => [
                 'total_doctors' => Doctor::count(),
                 'total_patients' => User::where('role', 'patient')->count(),
@@ -129,31 +117,25 @@ Route::get('/dashboard', function () {
     }
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-/**
- * Global Resource Management
- * Protected routes for clinical and user-level administration.
- */
 Route::middleware(['auth', 'verified'])->group(function () {
-    // User Account Lifecycle
     Route::delete('/users/{id}', function ($id) {
         User::findOrFail($id)->delete();
         return redirect()->back();
     })->name('users.destroy');
 
-    // Specialist and Schedule Administration
     Route::post('/doctors', [DoctorController::class, 'store'])->name('doctors.store');
+    Route::patch('/doctors/{id}', [DoctorController::class, 'update'])->name('doctors.update');
     Route::post('/doctor/profile/update', [DoctorController::class, 'updateProfile'])->name('doctor.profile.update');
+    
     Route::post('/schedules', [ScheduleController::class, 'store'])->name('schedules.store');
     Route::delete('/schedules/{id}', [ScheduleController::class, 'destroy'])->name('schedules.destroy');
 
-    // Facility/Hospital Management
     Route::post('/hospitals', [HospitalController::class, 'store'])->name('hospitals.store');
     Route::patch('/hospitals/{id}', [HospitalController::class, 'update'])->name('hospitals.update');
     Route::delete('/hospitals/{id}', [HospitalController::class, 'destroy'])->name('hospitals.destroy');
 
-    // Appointment Operations
     Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
-
+    
     Route::delete('/appointments/{id}', function ($id) {
         Appointment::findOrFail($id)->delete();
         return redirect()->back();
@@ -161,16 +143,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::patch('/appointments/{id}/status', [AppointmentController::class, 'update'])->name('appointments.status');
     Route::patch('/appointments/{id}', [AppointmentController::class, 'update'])->name('appointments.update');
-
     Route::get('/appointments/{id}/receipt', [AppointmentController::class, 'showReceipt'])->name('appointments.receipt');
 
-    // ✅ ADDED: Route to DELETE System Inquiries (For Admin)
     Route::delete('/contact/{id}', [ContactController::class, 'destroy'])->name('contact.destroy');
 });
 
-/**
- * Personal Profile Management
- */
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

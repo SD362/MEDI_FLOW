@@ -1,50 +1,32 @@
 import { Head, Link, router, usePage, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
-/**
- * DoctorDashboard Component
- * * Centralized clinical interface for medical practitioners.
- * * Updates:
- * * - Added Clinical Finalization Modal (Diagnosis, Prescription, Follow-up).
- * * - Integrated Toast Notification system for all actions.
- */
 export default function DoctorDashboard({ auth, appointments, hospitals, mySchedules }) {
 
     const { flash } = usePage().props;
-
-    // --- UI State ---
+    
     const [alertMessage, setAlertMessage] = useState(null);
     const [activeTab, setActiveTab] = useState('upcoming');
     const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-    // --- Action Modal State ---
     const [confirmModal, setConfirmModal] = useState(null);
-    const [finalizeModal, setFinalizeModal] = useState(null); // Stores appointment object being finalized
+    const [finalizeModal, setFinalizeModal] = useState(null);
 
-    /**
-     * Professional Identity State
-     */
     const profileForm = useForm({
         specialization: auth.user.doctor?.specialization || '',
         bio: auth.user.doctor?.bio || '',
         image: null,
     });
 
-    /**
-     * Clinical Data Form (For Finalization)
-     */
     const clinicalForm = useForm({
         diagnosis: '',
         prescription: '',
-        notes: '', // Lifestyle advice or internal notes
+        notes: '',
         next_visit_date: '',
         status: 'completed'
     });
 
-    /**
-     * Logistics State
-     */
     const [scheduleData, setScheduleData] = useState({
         hospital_id: hospitals && hospitals.length > 0 ? hospitals[0].id : '',
         day: 'Monday',
@@ -52,9 +34,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         end_time: '',
     });
 
-    /**
-     * Notification Trigger Logic
-     */
     useEffect(() => {
         if (flash?.message) {
             triggerNotification(flash.message);
@@ -66,9 +45,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         setTimeout(() => setAlertMessage(null), 4000);
     };
 
-    /**
-     * Data Segmentation
-     */
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -82,12 +58,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         return app.status === 'completed' || app.status === 'cancelled' || appDate < today;
     }) || [];
 
-    /**
-     * Action: Initialize Status Change (Authorize/Discard)
-     */
     const initiateStatusChange = (id, newStatus) => {
-        // If completing, we use the specific Finalize Modal instead
-        if(newStatus === 'completed') return;
+        if(newStatus === 'completed') return; 
 
         const actionType = newStatus === 'confirmed' ? 'Authorize' : 'Discard';
         setConfirmModal({
@@ -100,31 +72,26 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         });
     };
 
-    /**
-     * Action: Initialize Finalization (Opens Clinical Form)
-     */
     const openFinalizeModal = (appointment) => {
         setFinalizeModal(appointment);
         clinicalForm.reset();
+        clinicalForm.clearErrors();
     };
 
-    /**
-     * Action: Submit Clinical Data & Complete Appointment
-     */
     const submitFinalization = (e) => {
         e.preventDefault();
-        // Submits the clinical data (Diagnosis, Meds, Date) to the backend
         clinicalForm.patch(route('appointments.update', finalizeModal.id), {
+            preserveScroll: true,
             onSuccess: () => {
                 setFinalizeModal(null);
                 triggerNotification("Consultation finalized & prescription sent to patient.");
+            },
+            onError: () => {
+                triggerNotification("Please fill in all required clinical fields.");
             }
         });
     };
 
-    /**
-     * Action: Execute Confirmed Action (Simple Status/Delete)
-     */
     const executeAction = () => {
         if (!confirmModal) return;
 
@@ -189,7 +156,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
 
             <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-teal-500/30">
 
-                {/* --- NOTIFICATION TOAST --- */}
                 {alertMessage && (
                     <div className="fixed z-[100] top-24 left-1/2 -translate-x-1/2 animate-in slide-in-from-top-4 duration-300">
                         <div className="flex items-center gap-3 px-6 py-3 font-black text-[10px] uppercase tracking-widest bg-teal-500 border border-teal-400 shadow-2xl text-slate-900 rounded-2xl">
@@ -199,7 +165,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                     </div>
                 )}
 
-                {/* --- NAVIGATION --- */}
                 <nav className="fixed z-50 w-full border-b border-white/5 bg-slate-900/60 backdrop-blur-xl">
                     <div className="flex items-center justify-between h-20 px-8 mx-auto max-w-[1600px]">
                         <Link href="/" className="flex items-center gap-3 group">
@@ -212,7 +177,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                         <div className="flex items-center gap-4">
                             <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-2 px-4 py-2 transition border rounded-xl bg-white/[0.03] border-white/10 hover:bg-white/5">
                                 <div className="w-1.5 h-1.5 bg-teal-500 rounded-full"></div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sync Profile</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Edit Profile</span>
                             </button>
                             <div className="flex-col items-end hidden px-4 leading-none lg:flex">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Practitioner</span>
@@ -226,7 +191,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                 </nav>
 
                 <main className="px-8 pt-32 pb-20 mx-auto max-w-[1600px]">
-                    {/* ... (Metrics section remains same) ... */}
                     <div className="grid grid-cols-1 gap-6 mb-12 md:grid-cols-3">
                         {[
                             { label: 'Pending Requests', val: appointments?.filter(a => a.status === 'pending').length, color: 'text-yellow-400', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -247,7 +211,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                         ))}
                     </div>
 
-                    {/* Module Controls */}
                     <div className="flex flex-col items-center justify-between gap-4 mb-8 md:flex-row">
                         <div className="flex p-1 space-x-1 border bg-black/20 rounded-[1.25rem] border-white/5">
                             {['upcoming', 'history', 'schedules'].map((t) => (
@@ -260,7 +223,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                         </button>
                     </div>
 
-                    {/* Schedule Form */}
                     {isWorkFormOpen && (
                         <div className="p-10 mb-10 border bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] border-white/5 animate-in slide-in-from-top-4">
                             <h3 className="mb-8 text-xl italic font-black text-white">Register Availability Slot</h3>
@@ -289,10 +251,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                         </div>
                     )}
 
-                    {/* --- MAIN DATA VIEWS --- */}
                     <div className="relative p-1 border bg-white/[0.02] border-white/5 rounded-[2.5rem]">
-
-                        {/* Upcoming Tab */}
+                        
                         {activeTab === 'upcoming' && (
                             <div className="p-8 space-y-4 animate-in fade-in">
                                 {upcomingAppointments.length === 0 ? (
@@ -319,7 +279,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                                 {app.status === 'confirmed' && (
                                                     <>
                                                         <span className="px-4 py-1.5 text-[9px] font-black text-blue-400 uppercase tracking-widest rounded-lg bg-blue-500/10 border border-blue-500/20 mr-2 italic">Validated</span>
-                                                        {/* ✅ Opens the Clinical Form instead of direct completion */}
                                                         <button onClick={() => openFinalizeModal(app)} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-teal-500 rounded-xl text-slate-900 hover:scale-105 transition-all shadow-lg shadow-teal-500/20">Finalize & Report</button>
                                                     </>
                                                 )}
@@ -330,7 +289,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                             </div>
                         )}
 
-                        {/* History Tab */}
                         {activeTab === 'history' && (
                             <div className="overflow-hidden bg-black/20 rounded-[2rem] border border-white/5 animate-in fade-in">
                                 <table className="w-full text-left">
@@ -353,7 +311,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                             </div>
                         )}
 
-                        {/* Schedules Tab */}
                         {activeTab === 'schedules' && (
                             <div className="overflow-hidden bg-black/20 rounded-[2rem] border border-white/5 animate-in fade-in">
                                 <table className="w-full text-left">
@@ -367,7 +324,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                                 <td className="p-6 font-mono text-[11px] text-teal-400 uppercase tracking-widest">{sch.start_time} — {sch.end_time}</td>
                                                 <td className="p-6 text-[11px] font-bold text-slate-500 uppercase">{sch.hospital?.name}</td>
                                                 <td className="p-6 text-right">
-                                                    <button onClick={() => initiateDeleteSchedule(sch.id)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-red-500 transition border border-red-500/20 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white">Decommission Slot</button>
+                                                    <button onClick={() => initiateDeleteSchedule(sch.id)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-red-500 transition border border-red-500/20 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white">Remove Slot</button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -378,7 +335,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                     </div>
                 </main>
 
-                {/* --- PROFILE MODAL --- */}
                 {isProfileModalOpen && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className="w-full max-w-lg p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl">
@@ -411,13 +367,11 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                     </div>
                 )}
 
-                {/* --- ✅ NEW: CLINICAL FINALIZATION MODAL --- */}
                 {finalizeModal && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className="w-full max-w-2xl p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                             {/* Decorative Glow */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 blur-[80px] -z-10"></div>
-
+                            
                             <h3 className="mb-2 text-2xl italic font-black text-white">Clinical Report</h3>
                             <p className="mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Finalizing consultation for {finalizeModal.user.name}</p>
 
@@ -425,28 +379,30 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                                     <div className="md:col-span-2">
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Medical Diagnosis</label>
-                                        <textarea
+                                        <textarea 
                                             required
                                             className="w-full h-24 p-5 text-sm text-white transition-all border outline-none resize-none bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500 placeholder-white/20"
                                             placeholder="Primary clinical findings..."
                                             value={clinicalForm.data.diagnosis}
                                             onChange={e => clinicalForm.setData('diagnosis', e.target.value)}
                                         />
+                                        {clinicalForm.errors.diagnosis && <div className="mt-1 text-[9px] text-red-500 font-bold uppercase">{clinicalForm.errors.diagnosis}</div>}
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Prescription / Regimen</label>
-                                        <textarea
+                                        <textarea 
                                             required
                                             className="w-full h-32 p-5 text-sm text-white transition-all border outline-none resize-none bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500 placeholder-white/20"
                                             placeholder="Medication, dosage, and frequency..."
                                             value={clinicalForm.data.prescription}
                                             onChange={e => clinicalForm.setData('prescription', e.target.value)}
                                         />
+                                        {clinicalForm.errors.prescription && <div className="mt-1 text-[9px] text-red-500 font-bold uppercase">{clinicalForm.errors.prescription}</div>}
                                     </div>
                                     <div>
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Clinical Notes (Private)</label>
-                                        <input
-                                            type="text"
+                                        <input 
+                                            type="text" 
                                             className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
                                             value={clinicalForm.data.notes}
                                             onChange={e => clinicalForm.setData('notes', e.target.value)}
@@ -454,8 +410,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                     </div>
                                     <div>
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Next Review Date</label>
-                                        <input
-                                            type="date"
+                                        <input 
+                                            type="date" 
                                             className="w-full px-6 text-sm text-white uppercase transition-all border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
                                             min={new Date().toISOString().split('T')[0]}
                                             value={clinicalForm.data.next_visit_date}
@@ -465,16 +421,16 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                 </div>
 
                                 <div className="flex gap-4 mt-4">
-                                    <button
-                                        type="submit"
+                                    <button 
+                                        type="submit" 
                                         disabled={clinicalForm.processing}
                                         className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-teal-500 text-slate-900 rounded-[1.25rem] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 active:scale-95 transition-all disabled:opacity-50"
                                     >
                                         {clinicalForm.processing ? 'Signing...' : 'SUBMIT & CLOSE CASE'}
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFinalizeModal(null)}
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setFinalizeModal(null)} 
                                         className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
                                     >
                                         CANCEL
@@ -485,7 +441,6 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                     </div>
                 )}
 
-                {/* --- UNIVERSAL ACTION CONFIRMATION MODAL --- */}
                 {confirmModal && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className={`w-full max-w-md p-10 border bg-slate-900 rounded-[3rem] shadow-2xl ${confirmModal.color === 'red' ? 'border-red-500/20' : 'border-teal-500/20'}`}>
@@ -493,14 +448,14 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                             <h3 className="mb-4 text-2xl italic font-black text-white">{confirmModal.title}</h3>
                             <p className="mb-8 text-xs font-medium leading-relaxed text-slate-400">{confirmModal.message}</p>
                             <div className="flex gap-4">
-                                <button
-                                    onClick={executeAction}
+                                <button 
+                                    onClick={executeAction} 
                                     className={`flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] text-white rounded-[1.25rem] shadow-xl active:scale-95 transition-all ${confirmModal.color === 'red' ? 'bg-red-500 hover:bg-red-400' : 'bg-teal-500 text-slate-900 hover:bg-teal-400'}`}
                                 >
                                     CONFIRM
                                 </button>
-                                <button
-                                    onClick={() => setConfirmModal(null)}
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
                                     className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
                                 >
                                     ABORT

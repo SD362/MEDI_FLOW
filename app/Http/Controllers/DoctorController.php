@@ -8,17 +8,8 @@ use App\Models\Doctor;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
-/**
- * DoctorController
- * Handles the administrative creation of doctor accounts and
- * manages professional profile details including imagery and specialization.
- */
 class DoctorController extends Controller
 {
-    /**
-     * Action: Register a new Doctor account.
-     * Logic: Synchronizes User authentication data with a secondary Doctor profile.
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -52,34 +43,44 @@ class DoctorController extends Controller
         return redirect()->back()->with('message', 'Doctor created successfully!');
     }
 
-    /**
-     * Action: Update Doctor professional profile.
-     * Logic: Handles specialization updates and performs disk clean-up
-     * when replacing existing profile imagery.
-     */
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'specialization' => 'required|string',
+        ]);
+
+        $doctor = Doctor::findOrFail($id);
+
+        $doctor->update([
+            'specialization' => $request->specialization,
+        ]);
+
+        return redirect()->back()->with('message', 'Specialist details updated successfully.');
+    }
+
     public function updateProfile(Request $request)
     {
-        $doctor = auth()->user()->doctor;
-
         $request->validate([
             'specialization' => 'required|string|max:255',
+            'bio' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $data = [
-            'specialization' => $request->specialization,
-        ];
+        $user = auth()->user();
+        $doctor = Doctor::firstOrNew(['user_id' => $user->id]);
 
-        // Process file upload and storage management
+        $doctor->specialization = $request->specialization;
+        $doctor->bio = $request->bio;
+
         if ($request->hasFile('image')) {
-            // Delete legacy image from public disk to conserve storage
-            if ($doctor->image) {
+            if ($doctor->exists && $doctor->image) {
                 Storage::disk('public')->delete($doctor->image);
             }
-            $data['image'] = $request->file('image')->store('doctors', 'public');
+            $path = $request->file('image')->store('doctors', 'public');
+            $doctor->image = $path;
         }
 
-        $doctor->update($data);
+        $doctor->save();
 
         return redirect()->back()->with('message', 'Professional profile updated successfully!');
     }
