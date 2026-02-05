@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 export default function DoctorDashboard({ auth, appointments, hospitals, mySchedules }) {
 
     const { flash } = usePage().props;
-    
+
     const [alertMessage, setAlertMessage] = useState(null);
     const [activeTab, setActiveTab] = useState('upcoming');
     const [isWorkFormOpen, setIsWorkFormOpen] = useState(false);
@@ -27,7 +27,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         status: 'completed'
     });
 
-    const [scheduleData, setScheduleData] = useState({
+    // ✅ REFACTORED: Using useForm for proper error handling
+    const scheduleForm = useForm({
         hospital_id: hospitals && hospitals.length > 0 ? hospitals[0].id : '',
         day: 'Monday',
         start_time: '',
@@ -59,7 +60,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
     }) || [];
 
     const initiateStatusChange = (id, newStatus) => {
-        if(newStatus === 'completed') return; 
+        if(newStatus === 'completed') return;
 
         const actionType = newStatus === 'confirmed' ? 'Authorize' : 'Discard';
         setConfirmModal({
@@ -124,13 +125,19 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
         });
     };
 
+    // ✅ UPDATED: Submit handler with error catching
     const submitSchedule = (e) => {
         e.preventDefault();
-        router.post(route('schedules.store'), scheduleData, {
+        scheduleForm.post(route('schedules.store'), {
+            preserveScroll: true,
             onSuccess: () => {
                 setIsWorkFormOpen(false);
+                scheduleForm.reset(); // Clear form
                 setActiveTab('schedules');
                 triggerNotification("Availability slot registered.");
+            },
+            onError: () => {
+                triggerNotification("Registration failed. Please check the time window.");
             }
         });
     };
@@ -223,36 +230,68 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                         </button>
                     </div>
 
+                    {/* ✅ UPDATED: Schedule Form with Error Display */}
                     {isWorkFormOpen && (
                         <div className="p-10 mb-10 border bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] border-white/5 animate-in slide-in-from-top-4">
                             <h3 className="mb-8 text-xl italic font-black text-white">Register Availability Slot</h3>
                             <form onSubmit={submitSchedule} className="grid items-end grid-cols-1 gap-8 md:grid-cols-4">
                                 <div>
                                     <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Facility Hub</label>
-                                    <select className="w-full px-6 text-white transition-all border outline-none appearance-none cursor-pointer h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={scheduleData.hospital_id} onChange={(e) => setScheduleData({...scheduleData, hospital_id: e.target.value})}>
+                                    <select
+                                        className="w-full h-14 px-6 text-white transition-all border outline-none appearance-none cursor-pointer bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                        value={scheduleForm.data.hospital_id}
+                                        onChange={(e) => scheduleForm.setData('hospital_id', e.target.value)}
+                                        required
+                                    >
                                         {hospitals?.map(h => <option key={h.id} value={h.id} className="bg-slate-900">{h.name}</option>)}
                                     </select>
+                                    {scheduleForm.errors.hospital_id && <div className="mt-1 text-[9px] text-red-500 font-bold uppercase">{scheduleForm.errors.hospital_id}</div>}
                                 </div>
                                 <div>
                                     <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Operational Day</label>
-                                    <select className="w-full px-6 text-white transition-all border outline-none appearance-none cursor-pointer h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={scheduleData.day} onChange={(e) => setScheduleData({...scheduleData, day: e.target.value})}>
+                                    <select
+                                        className="w-full h-14 px-6 text-white transition-all border outline-none appearance-none cursor-pointer bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                        value={scheduleForm.data.day}
+                                        onChange={(e) => scheduleForm.setData('day', e.target.value)}
+                                    >
                                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
                                     </select>
                                 </div>
                                 <div className="md:col-span-1">
                                     <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Time window (Start - End)</label>
                                     <div className="flex gap-4">
-                                        <input type="time" className="w-full px-4 text-white transition-all border outline-none h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" onChange={(e) => setScheduleData({...scheduleData, start_time: e.target.value})} required />
-                                        <input type="time" className="w-full px-4 text-white transition-all border outline-none h-14 bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" onChange={(e) => setScheduleData({...scheduleData, end_time: e.target.value})} required />
+                                        <input
+                                            type="time"
+                                            className="w-full h-14 px-4 text-white transition-all border outline-none bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                            value={scheduleForm.data.start_time}
+                                            onChange={(e) => scheduleForm.setData('start_time', e.target.value)}
+                                            required
+                                        />
+                                        <input
+                                            type="time"
+                                            className="w-full h-14 px-4 text-white transition-all border outline-none bg-black/20 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                            value={scheduleForm.data.end_time}
+                                            onChange={(e) => scheduleForm.setData('end_time', e.target.value)}
+                                            required
+                                        />
                                     </div>
+                                    {(scheduleForm.errors.start_time || scheduleForm.errors.end_time) &&
+                                        <div className="mt-1 text-[9px] text-red-500 font-bold uppercase">Invalid Time Window</div>
+                                    }
                                 </div>
-                                <button className="h-14 bg-teal-500 hover:bg-teal-400 text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all active:scale-95">Authorize Slot</button>
+                                <button
+                                    type="submit"
+                                    disabled={scheduleForm.processing}
+                                    className="h-14 bg-teal-500 hover:bg-teal-400 text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {scheduleForm.processing ? 'Registering...' : 'Authorize Slot'}
+                                </button>
                             </form>
                         </div>
                     )}
 
                     <div className="relative p-1 border bg-white/[0.02] border-white/5 rounded-[2.5rem]">
-                        
+
                         {activeTab === 'upcoming' && (
                             <div className="p-8 space-y-4 animate-in fade-in">
                                 {upcomingAppointments.length === 0 ? (
@@ -371,7 +410,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
                         <div className="w-full max-w-2xl p-12 border bg-slate-900 border-white/10 rounded-[3rem] shadow-2xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 blur-[80px] -z-10"></div>
-                            
+
                             <h3 className="mb-2 text-2xl italic font-black text-white">Clinical Report</h3>
                             <p className="mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Finalizing consultation for {finalizeModal.user.name}</p>
 
@@ -379,7 +418,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                                     <div className="md:col-span-2">
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Medical Diagnosis</label>
-                                        <textarea 
+                                        <textarea
                                             required
                                             className="w-full h-24 p-5 text-sm text-white transition-all border outline-none resize-none bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500 placeholder-white/20"
                                             placeholder="Primary clinical findings..."
@@ -390,7 +429,7 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Prescription / Regimen</label>
-                                        <textarea 
+                                        <textarea
                                             required
                                             className="w-full h-32 p-5 text-sm text-white transition-all border outline-none resize-none bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500 placeholder-white/20"
                                             placeholder="Medication, dosage, and frequency..."
@@ -401,8 +440,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                     </div>
                                     <div>
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Clinical Notes (Private)</label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             className="w-full px-6 text-sm text-white transition-all border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
                                             value={clinicalForm.data.notes}
                                             onChange={e => clinicalForm.setData('notes', e.target.value)}
@@ -410,8 +449,8 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                     </div>
                                     <div>
                                         <label className="block mb-2 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Next Review Date</label>
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             className="w-full px-6 text-sm text-white uppercase transition-all border outline-none h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
                                             min={new Date().toISOString().split('T')[0]}
                                             value={clinicalForm.data.next_visit_date}
@@ -421,16 +460,16 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                                 </div>
 
                                 <div className="flex gap-4 mt-4">
-                                    <button 
-                                        type="submit" 
+                                    <button
+                                        type="submit"
                                         disabled={clinicalForm.processing}
                                         className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-teal-500 text-slate-900 rounded-[1.25rem] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 active:scale-95 transition-all disabled:opacity-50"
                                     >
                                         {clinicalForm.processing ? 'Signing...' : 'SUBMIT & CLOSE CASE'}
                                     </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setFinalizeModal(null)} 
+                                    <button
+                                        type="button"
+                                        onClick={() => setFinalizeModal(null)}
                                         className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
                                     >
                                         CANCEL
@@ -448,14 +487,14 @@ export default function DoctorDashboard({ auth, appointments, hospitals, mySched
                             <h3 className="mb-4 text-2xl italic font-black text-white">{confirmModal.title}</h3>
                             <p className="mb-8 text-xs font-medium leading-relaxed text-slate-400">{confirmModal.message}</p>
                             <div className="flex gap-4">
-                                <button 
-                                    onClick={executeAction} 
+                                <button
+                                    onClick={executeAction}
                                     className={`flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] text-white rounded-[1.25rem] shadow-xl active:scale-95 transition-all ${confirmModal.color === 'red' ? 'bg-red-500 hover:bg-red-400' : 'bg-teal-500 text-slate-900 hover:bg-teal-400'}`}
                                 >
                                     CONFIRM
                                 </button>
-                                <button 
-                                    onClick={() => setConfirmModal(null)} 
+                                <button
+                                    onClick={() => setConfirmModal(null)}
                                     className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
                                 >
                                     ABORT

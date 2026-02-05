@@ -163,7 +163,7 @@ export default function Login({ status, canResetPassword }) {
                             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
                                 New to the infrastructure?{' '}
                                 <Link href={route('register')} className="ml-1 text-teal-500 transition-colors hover:text-teal-400">
-                                    Enlist Profile
+                                    Register
                                 </Link>
                             </p>
                         </div>

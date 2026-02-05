@@ -144,7 +144,7 @@ export default function Specialists({ auth, doctors, specialties }) {
                                             href={route('dashboard', { doctor_id: doctor.id })}
                                             className="w-full h-14 bg-white/[0.03] hover:bg-teal-500 border border-white/5 hover:border-teal-400 text-white hover:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 active:scale-95 shadow-xl"
                                         >
-                                            Initiate Booking
+                                            appointment
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                                         </Link>
                                     </div>

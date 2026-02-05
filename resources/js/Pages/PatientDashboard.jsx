@@ -369,7 +369,7 @@ export default function PatientDashboard({ auth, doctors, filters, specialties, 
                                                 }}
                                                 className="w-full h-14 bg-teal-500 text-slate-900 rounded-[1.25rem] font-bold text-[10px] uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:bg-teal-400 transition-all active:scale-95 flex items-center justify-center gap-3"
                                             >
-                                                ESTABLISH LINK
+                                                appointment
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
                                             </button>
                                         </div>

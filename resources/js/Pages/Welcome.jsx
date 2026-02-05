@@ -74,10 +74,10 @@ export default function Welcome({ auth, doctorCount }) {
 
                             <div className="flex flex-col justify-center gap-4 sm:flex-row md:justify-start">
                                 <Link href={route('register')} className="px-10 py-5 bg-teal-500 text-slate-900 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-teal-500/20 hover:bg-teal-400 transition-all hover:-translate-y-1 active:scale-95">
-                                    Enlist Now
+                                    Book an appointment
                                 </Link>
                                 <Link href={route('specialists')} className="px-10 py-5 border border-white/10 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-white/5 transition-all backdrop-blur-sm active:scale-95">
-                                    Network Registry
+                                    Medical Network
                                 </Link>
                             </div>
                         </div>

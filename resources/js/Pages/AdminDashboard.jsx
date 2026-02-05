@@ -26,9 +26,9 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
         "Gynecologist",
         "Neurologist",
         "Oncologist",
-        "Ophthalmologist", // Eye
+        "Ophthalmologist",
         "Orthopedic Surgeon",
-        "Otolaryngologist", // Ear, Nose, Throat (ENT)
+        "Otolaryngologist",
         "Pediatrician",
         "Psychiatrist",
         "Pulmonologist",
@@ -243,10 +243,10 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                             <input type="email" placeholder="Email Address" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.email} onChange={e => setData('email', e.target.value)} required />
                                             <input type="password" placeholder="Access Password" className="w-full px-6 text-white border outline-none h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" value={data.password} onChange={e => setData('password', e.target.value)} required />
                                             <div className="relative">
-                                                <select 
-                                                    className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" 
-                                                    value={data.specialization} 
-                                                    onChange={e => setData('specialization', e.target.value)} 
+                                                <select
+                                                    className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/30 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                                    value={data.specialization}
+                                                    onChange={e => setData('specialization', e.target.value)}
                                                     required
                                                 >
                                                     <option value="" disabled>Select Discipline</option>
@@ -299,8 +299,8 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                                                     <td className="p-6 font-bold text-white">{p.name}</td>
                                                     <td className="p-6 text-slate-400">{p.email}</td>
                                                     <td className="p-6 space-x-6 text-right">
-                                                        <button onClick={() => {setEditingPatient(p); setData({name: p.name, email: p.email});}} className="text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300">Edit Records</button>
-                                                        <button onClick={() => handleDeleteResource(p.id, 'Patient')} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Purge</button>
+                                                        <button onClick={() => {setEditingPatient(p); setData({name: p.name, email: p.email});}} className="text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300">Edit</button>
+                                                        <button onClick={() => handleDeleteResource(p.id, 'Patient')} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">Remove</button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -426,9 +426,9 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             <h3 className="mb-8 text-2xl italic font-black text-white">Update Specialization</h3>
                             <form onSubmit={handleUpdateDoctor} className="space-y-8">
                                 <div className="relative">
-                                    <select 
-                                        className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500" 
-                                        value={data.specialization} 
+                                    <select
+                                        className="w-full px-6 text-white border outline-none appearance-none cursor-pointer h-14 bg-black/40 border-white/10 rounded-2xl focus:ring-2 focus:ring-teal-500"
+                                        value={data.specialization}
                                         onChange={e => setData('specialization', e.target.value)}
                                         required
                                     >
@@ -489,14 +489,14 @@ export default function AdminDashboard({ auth, doctors, patients, appointments, 
                             <h3 className="mb-4 text-2xl italic font-black text-white">{confirmModal.title}</h3>
                             <p className="mb-8 text-xs font-medium leading-relaxed text-slate-400">{confirmModal.message}</p>
                             <div className="flex gap-4">
-                                <button 
-                                    onClick={executeAction} 
+                                <button
+                                    onClick={executeAction}
                                     className={`flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] text-white rounded-[1.25rem] shadow-xl active:scale-95 transition-all ${confirmModal.color === 'red' ? 'bg-red-500 hover:bg-red-400' : 'bg-teal-500 text-slate-900 hover:bg-teal-400'}`}
                                 >
                                     CONFIRM
                                 </button>
-                                <button 
-                                    onClick={() => setConfirmModal(null)} 
+                                <button
+                                    onClick={() => setConfirmModal(null)}
                                     className="flex-1 h-14 font-bold uppercase tracking-[0.2em] text-[11px] bg-white/[0.03] border border-white/5 text-slate-400 rounded-[1.25rem] hover:bg-white/10 active:scale-95 transition-all"
                                 >
                                     ABORT
